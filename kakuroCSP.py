@@ -2,24 +2,49 @@
 # Solve a kakuro puzzle as a constraint satisfaction problem
 # Constraint API documentation is available at
 # http://labix.org/doc/constraint/
+# Documentation isn't very good.  There are examples at
+# http://www.csee.umbc.edu/courses/graduate/CMSC671/fall12/code/python/python-constraint-1.1/examples/
 
-from constraint import Problem
+from constraint import Problem, ExactSumConstraint, AllDifferentConstraint
 from collections import namedtuple
 
-Equation = namedtuple('Equations', variables, clue)
+Equation = namedtuple('Equations', 'variables clue')
 
 def kakuroCSP():
-  # across and down are dicts whose keys are the coords of the black squares,
-  # and whose values are the clues.  Besides the blacks squares in row and
-  # column 0, there are a row and column of sentinel black squares, with
-  # inidices row and column.  A clue value of zero means there is no clue.
+  # Pre: variables and equations have been computed by sanityCheck
+  # If there is at least one solution, return (solutions, variables)
+  # Otherwise, return None
 
-  pass
+  problem = Problem()
+
+  # one variable for each white square, with values in range 1-9
+
+  problem.addVariables(variables, (1,2,3,4,5,6,7,8,9))
+
+  for eq in equations:
+    # All the numbers in a single sum are distinct
+
+    problem.addConstraint(AllDifferentConstraint(), eq.variables)
+
+    # The numbers must sum to the clue
+
+    problem.addConstraint(ExactSumConstraint(eq.clue), eq.variables)
+
+  solutions = problem.getSolutions()
+  if solutions:
+    return (solutions, variables)
+  else:
+    return None
 
 def sanityCheck(rows, cols, across, down):
   # Returns a list of impossible clues, if any
   # As a SIDE EFFECT, initializes the global equations object, and the
   # the global varaibles object which are used later by kakuroCSP
+
+  # across and down are dicts whose keys are the coords of the black squares,
+  # and whose values are the clues.  Besides the blacks square in row and
+  # column 0, there are a row and column of sentinel black squares, with
+  # inidices row and column.  A clue value of zero means there is no clue.
 
   global equations, variables
   equations = []
