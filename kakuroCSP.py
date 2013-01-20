@@ -12,8 +12,7 @@ Equation = namedtuple('Equations', 'variables clue')
 
 def kakuroCSP():
   # Pre: variables and equations have been computed by sanityCheck
-  # If there is at least one solution, return (solutions, variables)
-  # Otherwise, return None
+  # Return (solutions, variables)
 
   problem = Problem()
 
@@ -31,10 +30,8 @@ def kakuroCSP():
     problem.addConstraint(ExactSumConstraint(eq.clue), eq.variables)
 
   solutions = problem.getSolutions()
-  if solutions:
-    return (solutions, variables)
-  else:
-    return None
+  return (solutions, variables)
+
 
 def sanityCheck(rows, cols, across, down):
   # Returns a list of impossible clues, if any
@@ -81,7 +78,7 @@ def sanityCheck(rows, cols, across, down):
 def limits(n):
   # maximim and minimum sums in n numbers
 
-  return (n*(n+1)//2, (10-n)*(n+9)//2)
+  return (n*(n+1)//2, n*(19-n)//2)
 
 
 

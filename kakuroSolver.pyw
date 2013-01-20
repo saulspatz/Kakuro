@@ -106,9 +106,6 @@ class Board(ScrolledCanvas):
     canvas.tag_bind('cell', '<ButtonPress-1>', self.onClick)
     canvas.tag_bind('cell', '<ButtonPress-3>', self.onRightClick)
 
-  def redraw(self, event):
-    self.createCells(event.height, event.width, self.rows, self.cols)
-
   def onClick(self, event):
     if self.frozen:
       return
@@ -189,27 +186,29 @@ class Kakuro(object):
     canvas = self.board.canvas
     rows = self.board.rows
     cols = self.board.cols
-    acrossClues = dict()
-    downClues = dict()
+    across = dict()
+    down = dict()
 
     # add a sentinel black square to the end of each row and column
     for r in range(rows+1):
       across[r, cols] = 0
     for c in range(cols+1):
-      down[c, rows] = 0
+      down[rows, c] = 0
     for sq in canvas.find_withtag('black'):
-      tags = canvas.find_withtag(sq)
+      tags = canvas.gettags(sq)
       rTag = [t for t in tags if t.startswith('R')][0]
       cTag = [t for t in tags if t.startswith('C')][0]
       r = int(rTag[1:])
       c = int(cTag[1:])
       clueTag = 'clue'+rTag+cTag
       try:
-        across[r, c] = int(canvas.find_withtag(clueTag+'A')[0].text)
+        id = canvas.find_withtag(clueTag+'A')[0]
+        across[r, c] = int(canvas.itemcget(id, 'text'))
       except IndexError:
         across[r, c] = 0
       try:
-        down[r, c] = int(canvas.find_withtag(clueTag+'D')[0].text)
+        id = canvas.find_withtag(clueTag+'D')[0]
+        down[r, c] = int(canvas.itemcget(id, 'text'))
       except IndexError:
         down[r, c] = 0
 
@@ -230,8 +229,8 @@ class Kakuro(object):
       for b in bad:
         errs += "At row %2d column %sd: Can't make %2d in %d\n" % b
       showerror("Invalid Clues", errs)
-      return []
-    return kakuroCSP()
+      self.solns = []
+    self.solns, self.vars = kakuroCSP()
 
   def report(self):
     solns = self.solns
@@ -261,14 +260,21 @@ class Kakuro(object):
     master = self.win
     win.transient(master)
 
-    self.var = IntVar(value = self.dim)
-    for idx, pick in enumerate(range(4,10)):
-      rad = Radiobutton(win, text=str(pick), value=pick, variable=self.var)
-      rad.grid(row = 0, column = idx)
+    self.rowVar = StringVar()
+    self.colVar = StringVar()
+    rowFrame = LabelFrame(win, text = "Rows")
+    colFrame = LabelFrame(win, text = "Columns")
+    rowEntry = Entry(rowFrame, textvariable=self.rowVar, width = 6)
+    colEntry = Entry(colFrame, textvariable = self.colVar, width = 6)
+    rowEntry.pack()
+    colEntry.pack()
+
     ok = Button(win, text = 'Okay', command = self.okayDim)
     cancel = Button(win, text = 'Cancel', command = self.cancelDim)
-    ok.grid(row = 1, column = 1)
-    cancel.grid(row = 1, column = 4)
+    ok.grid(row = 1, column = 0)
+    rowFrame.grid(row = 0, column = 0)
+    colFrame.grid(row = 0, column = 1)
+    cancel.grid(row = 1, column = 1)
 
     win.update_idletasks() # Actualize geometry information
     if master.winfo_ismapped():
@@ -301,16 +307,25 @@ class Kakuro(object):
 
   def okayDim(self):
     self.winDim.destroy()
-    self.board.drawNew()
+    rows = int(self.rowVar.get())
+    cols = int(self.colVar.get())
+    self.drawNew(rows, cols)
+    self.setTitle()
 
   def cancelDim(self):
     self.winDim.destroy()
+
+  def drawNew(self, rows, cols):
+    width = self.win.winfo_width() - 15
+    self.board.destroy()
+    self.board = Board(self.win, self, width = width, rows = rows, cols = cols)
+    self.board.pack(side = TOP, expand=YES, fill=BOTH)
 
   def savePuzzle(self):
     # Menu item is enabled if and only if the puzzle has been solved
     # and has exactly one solution
 
-    board = self.borad
+    board = self.board
     rows = board.rows
     cols = board.cols
     fname = asksaveasfilename( filetypes = [('Kakuro Files', '.kro')],
@@ -375,7 +390,8 @@ class Control(Frame):
       tags = canvas.gettags('highlight')
 
       if not tags:
-        showerror('No Cell Selected', 'Please select a cell on order to enter a clue')
+        showerror('No Cell Selected',
+                  'Please select a cell on order to enter a clue')
         return
 
       tag = [t for t in tags if t.startswith(direction)]
