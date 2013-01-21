@@ -6,7 +6,8 @@
 # http://www.csee.umbc.edu/courses/graduate/CMSC671/fall12/code/python/python-constraint-1.1/examples/
 
 from constraint import Problem, ExactSumConstraint, AllDifferentConstraint
-from collections import namedtuple
+from collections import namedtuple, defaultdict
+from itertools import combinations
 
 Equation = namedtuple('Equations', 'variables clue')
 
@@ -16,9 +17,23 @@ def kakuroCSP():
 
   problem = Problem()
 
-  # one variable for each white square, with values in range 1-9
+  # Restrict the value of each white square as much as possible
 
-  problem.addVariables(variables, (1,2,3,4,5,6,7,8,9))
+  domains = defaultdict(set)
+  univ = list(range(1,10))
+  for n in univ:
+    for c in combinations(univ, n):
+      domains[sum(c), n] |= set(c)
+
+  candidates = {v: set(univ) for v in variables}
+  for eq in equations:
+    for v in eq.variables:
+      candiates[v] &= domains[eq.clue, len(eq.variables)]
+
+  # one variable for each white square, with values in range computed above
+
+  for v in variables:
+    problem.addVariable(v, tuple(candiates[v]))
 
   for eq in equations:
     # All the numbers in a single sum are distinct

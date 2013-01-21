@@ -17,39 +17,9 @@ blackFill = 'dark gray'
 defaultFill = 'white'
 currentFill = 'light blue'
 
-class ClueEntry(LabelFrame):
-  # for validation documentation, see
-  # http://stackoverflow.com/questions/4140437/python-tkinter-interactively-validating-entry-widget-content
-
-  def __init__(self, master, title, val):
-    LabelFrame.__init__(self, master, text=title)
-    self.intvar = StringVar()
-    self.intvar.set(val)
-    cmd = (self.register(self.validate), "%P")
-    entry = Entry(self, textvariable=self.intvar, validate="key",
-                  validatecommand=cmd)
-    entry.grid(row=0,column=0,sticky='ew')
-    self.columnconfigure(0, weight=1)
-    self.entry = entry
-
-  def get(self):
-    try:
-      value = int(self.intvar.get())
-    except ValueError:        # empty string
-      return 0
-    if not 3 <= value <= 45:
-      showerror("Invalid Value", "Value must be between 3 and 45.")
-      return None
-    self.entry.delete(0, 'end')
-    return value
-
-  def validate(self, proposed):
-    return proposed == '' or proposed.isdigit()
-
 class ScrolledCanvas(Frame):
-  def __init__(self, parent, width, height, bg, cursor):
-    Frame.__init__(self, parent)
-    self.pack(expand=YES, fill=BOTH)                  # make me expandable
+  def __init__(self, master, width, height, bg, cursor):
+    Frame.__init__(self, master)
     canv = Canvas(self, bg=bg, relief=SUNKEN)
     canv.config(width=width, height=height)           # display area size
     canv.config(scrollregion=(0, 0, width, 2000))     # canvas size corners
@@ -65,16 +35,16 @@ class ScrolledCanvas(Frame):
 class Board(ScrolledCanvas):
   # View
 
-  def __init__(self, win, parent, width = 600, height = 800, bg = 'white',
+  def __init__(self, master, width = 600, height = 800, bg = 'white',
                cols = 12, rows = 21, cursor = 'crosshair'):
     rows += 1   # Allow for top and left boundaries
     cols += 1
     cw = ( width-10 ) // cols
     height = cw * rows + 10
-    ScrolledCanvas.__init__(self, win, width = width, height = height,
+    ScrolledCanvas.__init__(self, master, width = width, height = height,
                             bg=bg, cursor=cursor)
     self.cellHeight = self.cellWidth = cw
-    self.parent = parent
+    self.master = master
     self.createCells(height, width, rows, cols)
 
     self.frozen = False       # respond to mouse clicks
@@ -93,15 +63,25 @@ class Board(ScrolledCanvas):
 
     for c, x in enumerate(range(self.x0, self.x0+cols*cw, cw)):
       for r, y in enumerate(range(self.y0,  self.y0+rows*ch, ch)):
+        rTag = 'R%s' % r
+        cTag = 'C%s' % c
+        clueTag = 'clue'+rTag + cTag
         id = canvas.create_rectangle(x, y, x+cw, y+ch, fill = defaultFill,
-                                     tags=('cell', 'R%s' % r, 'C%s' % c))
+                                     tags=('cell', rTag, cTag))
         if r == 0 or c == 0:
           canvas.addtag_withtag('black', id)
         if r == 0:
           canvas.addtag_withtag('top', id)
         if c == 0:
           canvas.addtag_withtag('left', id)
-        tags = canvas.gettags(id)
+        if r == rows-1:
+          canvas.addtag_withtag('bottom', id)
+        if c == cols-1:
+          canvas.addtag_withtag('right', id)
+        canvas.create_text(x+cw-2, y+2, anchor = NE, tag = clueTag+'A',
+                           text = '', font = clueFont)
+        canvas.create_text(x+2, y+ch-2, anchor = SW, tag = clueTag+'D',
+                                   text = '', font = clueFont)
     canvas.itemconfigure('black', fill = blackFill)
     canvas.tag_bind('cell', '<ButtonPress-1>', self.onClick)
     canvas.tag_bind('cell', '<ButtonPress-3>', self.onRightClick)
@@ -110,6 +90,12 @@ class Board(ScrolledCanvas):
     if self.frozen:
       return
     canvas = event.widget
+    control = self.master.control
+    acrossScale = control.acrossScale
+    downScale = control.downScale
+
+    acrossScale.configure(state=DISABLED)
+    downScale.configure(state=DISABLED)
 
     # first unhighlight the current cell
 
@@ -121,6 +107,26 @@ class Board(ScrolledCanvas):
     canvas.addtag_withtag('black', obj)
     canvas.itemconfigure(obj, fill = currentFill)
 
+    tags = canvas.gettags('current')
+    rTag = [tag for tag in tags if tag.startswith('R')][0]
+    cTag = [tag for tag in tags if tag.startswith('C')][0]
+    clueTag = 'clue' + rTag + cTag
+
+
+    aText = canvas.itemcget(clueTag+'A', 'text')
+    aClue = int(aText) if aText else 0
+    acrossScale.configure(state = NORMAL)
+    acrossScale.set(aClue)
+    if 'top' in tags or 'right' in tags:
+      acrossScale.configure(state = DISABLED)
+
+    dText = canvas.itemcget(clueTag+'D', 'text')
+    dClue = int(dText) if dText else 0
+    downScale.configure(state = NORMAL)
+    downScale.set(dClue)
+    if 'bottom' in tags or 'left' in tags:
+      downScale.configure(state = DISABLED)
+
   def onRightClick(self, event):
 
     # Unselect a black square
@@ -129,41 +135,53 @@ class Board(ScrolledCanvas):
       return
     canvas = event.widget
 
-    # first unhighlight the current cell
+    control = self.master.control
+    acrossScale = control.acrossScale
+    downScale = control.downScale
+
+    # first unhighlight the highlighted cell
 
     canvas.itemconfigure('highlight', fill=blackFill)
     canvas.dtag('highlight', 'highlight')
 
+    # Erase any clues
     tags = canvas.gettags('current')
-    if 'top' in tags or 'left' in tags:
-      return
-    rTag = [t for t in tags if t.startswith('R')][0]
-    cTag = [t for t in tags if t.startswith('C')][0]
+    rTag = [tag for tag in tags if tag.startswith('R')][0]
+    cTag = [tag for tag in tags if tag.startswith('C')][0]
     clueTag = 'clue' + rTag + cTag
-    canvas.delete(clueTag+'A')
-    canvas.delete(clueTag+'D')
-    canvas.dtag('current', 'black')
-    canvas.itemconfigure('current', fill = defaultFill)
+    for scale in (acrossScale, downScale):
+      scale.configure(state=NORMAL)
+      scale.set(0)
+      scale.configure(state=DISABLED)
+    for d in ('A', 'D'):
+      canvas.itemconfigure(clueTag+d, text = '')
+
+    if 'top' not in tags and 'left' not in tags:
+      canvas.dtag('current', 'black')
+      canvas.itemconfigure('current', fill = defaultFill)
 
   def printBoard(self):
     pass
 
-class Kakuro(object):
+class Kakuro(Frame):
 
-  def __init__(self, win, bg = 'white', cursor = 'crosshair'):
-    self.win = win
-    self.control=Control(self, win)
-    self.board = Board(win, self, bg = bg, cursor=cursor)
+  def __init__(self, master, bg = 'white', cursor = 'crosshair'):
+    Frame.__init__(self, master)
+    self.pack()
+    self.master = master
+    self.board = Board(self, bg = bg, cursor=cursor)
+    self.control = Control(self)
     self.setTitle()
-    self.board.pack(side = TOP, expand=YES, fill=BOTH)
-    self.menu = self.makeMenu(win)
+    self.control.pack(side=BOTTOM, expand=YES, fill = X)
+    self.board.pack(side=TOP, expand = YES, fill = BOTH)
+    self.menu = self.makeMenu(master)
     self.fileSaveDir = '.'        # directory for saving puzzles
     global clueFont
     clueFont= tkFont.Font(family = 'Helvetica', size = 12, weight = 'normal')
 
   def setTitle(self):
     b = self.board
-    self.win.title('Kakuro Solver %d-by-%d' %(b.rows-1, b.cols-1))
+    self.master.title('Kakuro Solver %d-by-%d' %(b.rows-1, b.cols-1))
 
   def makeMenu(self, win):
     def notdone():
@@ -257,7 +275,7 @@ class Kakuro(object):
     win.withdraw()  # Remain invisible while we figure out the geometry
     relx= .5
     rely = .3
-    master = self.win
+    master = self.master
     win.transient(master)
 
     self.rowVar = StringVar()
@@ -316,10 +334,10 @@ class Kakuro(object):
     self.winDim.destroy()
 
   def drawNew(self, rows, cols):
-    width = self.win.winfo_width() - 15
+    width = self.master.winfo_width() - 15
     self.board.destroy()
-    self.board = Board(self.win, self, width = width, rows = rows, cols = cols)
-    self.board.pack(side = TOP, expand=YES, fill=BOTH)
+    self.board = Board(self, width = width, rows = rows, cols = cols)
+    self.board.pack(side=TOP, expand = YES, fill = BOTH)
 
   def savePuzzle(self):
     # Menu item is enabled if and only if the puzzle has been solved
@@ -345,93 +363,62 @@ class Kakuro(object):
     fout.close()
 
 class Control(Frame):
-  def __init__(self, parent, win):
-    Frame.__init__(self, win)
-    self.parent = parent
+  def __init__(self, master):
+    Frame.__init__(self, master)
+    self.canvas = master.board.canvas
+    self.master = master
 
-    self.pack(side = BOTTOM, expand = NO, fill = X)
-    self.helpButton = Button(self, text = 'Help')
-    self.helpButton.pack(side = LEFT, expand = YES)
+    helpButton = Button(self, text = 'Help')
 
-    self.across = ClueEntry(self, "Across", '')
-    self.across.pack(side = LEFT, expand = YES)
-    self.down = ClueEntry(self, "Down", '')
-    self.down.pack(side = LEFT, expand = YES)
-    self.getReady()
+    solveButton = Button(self, text = 'Solve',
+                              command = master.solve)
 
-    self.solveButton = Button(self, text = 'Solve', command = self.parent.solve)
-    self.solveButton.pack(side = LEFT, expand = YES)
+    self.across = IntVar()
+    self.down = IntVar()
+    self.acrossScale = Scale(self, orient = HORIZONTAL, from_ = 0, to = 45,
+                        label = 'Across', variable = self.across,
+                        command = self.enterAcross, state = DISABLED)
+    self.downScale = Scale(self, orient = HORIZONTAL, from_ = 0, to = 45,
+                            label = 'Down', variable = self.down,
+                            command = self.enterDown, state = DISABLED)
 
-    self.across.entry.bind('<Key-Return>', self.enterAcross)
-    self.across.entry.bind('<Key-KP_Enter>', self.enterAcross)
-    self.down.entry.bind('<Key-Return>', self.enterDown)
-    self.down.entry.bind('<Key-KP_Enter>', self.enterDown)
+    helpButton.pack(side = LEFT, expand = YES)
+    self.acrossScale.pack(side = LEFT, expand = YES)
+    self.downScale.pack(side = LEFT, expand = YES)
+    solveButton.pack(side = LEFT, expand = YES)
 
   def disable(self):
-    self.solveButton.configure(state = 'disabled')
-    self.across.configure(state = 'disabled')
-    self.down.configure(state = 'disabled')
-    self.getReady()
+    self.solveButton.configure(state = DISABLED)
+    self.across.configure(state = DISABLED)
+    self.down.configure(state = DISABLED)
 
   def enable(self):
-    self.solveButton.configure(state = 'normal')
-    self.across.configure(state = 'normal')
-    self.down.configure(state = 'normal')
+    self.solveButton.configure(state = NORMAL)
+    self.across.configure(state = NORMAL)
+    self.down.configure(state = NORMAL)
+    self.getReady()
 
-  def enterAcross(self, event):
-    self.enterValue(event, 'A')
+  def enterAcross(self, value):
+    self.enterValue(value, 'A')
 
-  def enterDown(self, event):
-    self.enterValue(event, 'D')
+  def enterDown(self, value):
+    self.enterValue(value, 'D')
 
-  def enterValue(self, event, direction):
-      entry = event.widget
-      canvas = self.parent.board.canvas
-      tags = canvas.gettags('highlight')
+  def enterValue(self, value, direction):
+    canvas = self.master.board.canvas
+    tags = canvas.gettags('highlight')
 
-      if not tags:
-        showerror('No Cell Selected',
-                  'Please select a cell on order to enter a clue')
-        return
-
-      tag = [t for t in tags if t.startswith(direction)]
+    try:
       rTag = [t for t in tags if t.startswith('R')][0]
       cTag = [t for t in tags if t.startswith('C')][0]
-      if direction == 'A':
-        clue = self.across.get()
-        if 'top' in tags:
-          showerror('Invalid Clue', 'Cannot have an across clue here')
-          return
-      else:
-        clue = self.down.get()
-        if 'left' in tags:
-          showerror('Invalid Clue', 'Cannot have a down clue here')
-          return
-      if clue is None: return
-
-      canvas.dtag('highlight', tag)
-      #canvas.addtag_withtag( direction + str(clue), 'highlight')
-      canvas.dtag('highlight', tag)
-
       clueTag = 'clue' + rTag + cTag + direction
-      canvas.delete(clueTag)
-      left, top, right, bottom = canvas.bbox('highlight')
-
-      if clue == 0 : return
-
-      if direction == 'A':
-        y = top + 2
-        x = right - 2
-        canvas.create_text(x, y, anchor = NE, tag = clueTag, text = str(clue),
-                           font = clueFont)
-      else:
-        y = bottom - 2
-        x = left + 2
-        canvas.create_text(x, y, anchor = SW, tag = clueTag, text = str(clue),
-                           font = clueFont)
+      text = ('%s' % value) if int(value) >= 3 else ''
+      canvas.itemconfigure(clueTag, text = text)
+    except IndexError:
+      return
 
   def getReady(self):
-      self.across.entry.focus_set()
+      self.across.focus_set()
 
 def main():
   root = Tk()
