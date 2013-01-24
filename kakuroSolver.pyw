@@ -11,6 +11,7 @@ from tkFileDialog import *
 import tkFont
 import time, os.path, re
 from kakuroCSP import kakuroCSP, sanityCheck
+from utilities import displayDialog
 
 clueFont = ('helevetica', 12, 'normal')
 answerFont = ('helvetica', 24, 'bold')
@@ -44,7 +45,6 @@ class Board(ScrolledCanvas):
                             bg=bg, cursor=cursor)
     self.reset(width, rows, cols)
     self.master = master
-    self.frozen = False
 
   def reset(self, width, rows, cols):
     rows += 1   # Allow for top and left boundaries
@@ -96,15 +96,14 @@ class Board(ScrolledCanvas):
     canvas.tag_bind('cell', '<ButtonPress-3>', self.onRightClick)
 
   def onClick(self, event):
-    if self.frozen:
-      return
+
     canvas = event.widget
     control = self.master.control
     acrossScale = control.acrossScale
     downScale = control.downScale
 
-    acrossScale.configure(state=DISABLED)
-    downScale.configure(state=DISABLED)
+    acrossScale.configure(state = DISABLED)
+    downScale.configure(state = DISABLED)
 
     # first unhighlight the current cell
 
@@ -139,8 +138,6 @@ class Board(ScrolledCanvas):
 
     # Unselect a black square
 
-    if self.frozen:
-      return
     canvas = event.widget
 
     control = self.master.control
@@ -158,9 +155,9 @@ class Board(ScrolledCanvas):
     cTag = [tag for tag in tags if tag.startswith('C')][0]
     clueTag = 'clue' + rTag + cTag
     for scale in (acrossScale, downScale):
-      scale.configure(state=NORMAL)
+      scale.configure(state = NORMAL)
       scale.set(0)
-      scale.configure(state=DISABLED)
+      scale.configure(state = DISABLED)
     for d in ('A', 'D'):
       canvas.itemconfigure(clueTag+d, text = '')
 
@@ -170,8 +167,9 @@ class Board(ScrolledCanvas):
 
   def showSolution(self, idx):
     canvas = self.canvas
-    soln = self.master.solns[idx]
-    variables = self.master.vars
+    master = self.master
+    soln = master.solns[idx]
+    variables = master.vars
     canvas.delete('solution')
     for v in variables:
       coords = '%s.%s' % v
@@ -182,6 +180,7 @@ class Board(ScrolledCanvas):
       canvas.create_text(x, y, anchor=CENTER, fill='dark green',
                          text = str(soln[v]),
                          tag='solution', font = answerFont)
+    master.menu.file.entryconfigure('Clear', state = NORMAL)
 
   def printBoard(self):
     fout = asksaveasfilename( filetypes=[('postscript files', '.ps')],
@@ -226,13 +225,20 @@ class Kakuro(Frame):
     file = top.file = Menu(top, tearoff = 0)
     file.add_command(label='New', command=self.dimensionDialog, underline=0)
     file.add_command(label='Open', command = self.openFile, underline = 0)
-    file.add_command(label='Print', command=self.board.printBoard, underline=0)
     file.add_command(label='Save', command=self.savePuzzle, underline=0)
-    file.add_command(label='Quit', command=win.quit, underline=0)
-    file.entryconfigure('Save', state="disabled")
+    file.add_command(label='Clear',command = self.clearSolution, underline=0)
+    file.add_command(label='Print', command=self.board.printBoard, underline=0)
+    file.add_command(label='Exit', command=self.wrapup, underline=1)
+    file.entryconfigure('Save', state = DISABLED)
+    file.entryconfigure('Clear', state = DISABLED)
 
     top.add_cascade(label='File', menu=file, underline=0)
     return top
+
+  def clearSolution(self):
+    canvas = self.board.canvas
+    canvas.itemconfigure('solution', fill='white')
+    self.menu.file.entryconfigure('Clear', state = DISABLED)
 
   def solve(self):
     canvas = self.board.canvas
@@ -271,31 +277,41 @@ class Kakuro(Frame):
 
     aSum = sum(across.values())
     dSum = sum(down.values())
+
+    if  aSum == 0:
+      showerror('No Puzzle', 'Please enter some clues')
+      return []
+
     if aSum != dSum:
       showerror('Inconsistent Data',
          'Across clues total %d\nDown clues total %d' % (aSum, dSum))
       return []
 
-    #  ******************* TODO **********************
-    # Replace showerror with a nonmodal dialog here
-    # ************************************************
-
     bad = sanityCheck(rows, cols, across, down)
     if bad:
-      errs = ''
-      for b in bad:
-        errs += "At row %2d column %sd: Can't make %2d in %d\n" % b
-      showerror("Invalid Clues", errs)
-      self.solns = []
+      errs = ["row %2s col %2s: Can't make %2d in %s\n" % b for b in bad]
+      self.errorDialog('\n'.join(errs))
+      return []
+
     self.solns, self.vars = kakuroCSP()
     self.report()
+
+  def errorDialog(self, errs):
+    win = Toplevel()
+    win.withdraw()
+
+    label = Label(win, text = errs)
+    label.grid(row= 0, column = 0)
+    button = Button(win, text = 'Okay', command = win.destroy)
+
+    displayDialog(win, self.master, 'Invalid Clues')
 
   def report(self):
     solns = self.solns
     if not solns:
       showerror('Bad Problem', 'No Solution')
     elif len(solns) == 1:
-      self.menu.file.entryconfigure('Save', state='normal')
+      self.menu.file.entryconfigure('Save', state = NORMAL)
       if askyesno('One Solution', 'Display the solution?', default='no'):
         self.board.showSolution(0)
     else:
@@ -307,16 +323,8 @@ class Kakuro(Frame):
           break
 
   def dimensionDialog(self):
-
-    # **************** TODO ****************************
-    # Change this to a reusable class
-
     win = self.winDim = Toplevel()
     win.withdraw()  # Remain invisible while we figure out the geometry
-    relx= .5
-    rely = .3
-    master = self.master
-    win.transient(master)
 
     self.rowVar = StringVar()
     self.colVar = StringVar()
@@ -332,40 +340,13 @@ class Kakuro(Frame):
     colEntry.pack()
 
     ok = Button(win, text = 'Okay', command = self.okayDim)
-    cancel = Button(win, text = 'Cancel', command = self.cancelDim)
+    cancel = Button(win, text = 'Cancel', command = win.destroy)
     ok.grid(row = 1, column = 0)
     rowFrame.grid(row = 0, column = 0)
     colFrame.grid(row = 0, column = 1)
     cancel.grid(row = 1, column = 1)
 
-    win.update_idletasks() # Actualize geometry information
-    if master.winfo_ismapped():
-      m_width = master.winfo_width()
-      m_height = master.winfo_height()
-      m_x = master.winfo_rootx()
-      m_y = master.winfo_rooty()
-    else:
-      m_width = master.winfo_screenwidth()
-      m_height = master.winfo_screenheight()
-      m_x = m_y = 0
-    w_width = win.winfo_reqwidth()
-    w_height = win.winfo_reqheight()
-    x = m_x + (m_width - w_width) * relx
-    y = m_y + (m_height - w_height) * rely
-    if x+w_width > master.winfo_screenwidth():
-      x = master.winfo_screenwidth() - w_width
-    elif x < 0:
-      x = 0
-    if y+w_height > master.winfo_screenheight():
-      y = master.winfo_screenheight() - w_height
-    elif y < 0:
-      y = 0
-    win.geometry("+%d+%d" % (x, y))
-    win.title('Dimension')
-
-    win.deiconify()          # Become visible at the desired location
-    win.wait_visibility()
-    win.grab_set()           # make modal
+    displayDialog(win, self.master, 'Dimension', True)
 
   def okayDim(self):
     self.winDim.destroy()
@@ -373,13 +354,10 @@ class Kakuro(Frame):
     cols = int(self.colVar.get())
     self.drawNew(rows, cols)
 
-  def cancelDim(self):
-    self.winDim.destroy()
-
   def drawNew(self, rows, cols):
     root = self.master
     board = self.board
-    self.menu.file.entryconfigure('Save', state='disabled')
+    self.menu.file.entryconfigure('Save', state = DISABLED)
     width = root.winfo_width() - 15
     board.canvas.delete('all')
     board.reset(width, rows, cols)
@@ -460,6 +438,13 @@ class Kakuro(Frame):
     for white in sorted(soln):
       fout.write('%3s %3s %3s\n' % (white[0], white[1], soln[white]))
     fout.close()
+    self.menu.file.entryconfigure('Save', state = DISABLED)
+
+  def wrapup(self):
+    if self.menu.file.entrycget('Save', 'state') == NORMAL:
+      if askyesno('Puzzle Not Saved', "Save Current Puzzle?"):
+        self.savePuzzle()
+    self.master.destroy()
 
 class Control(Frame):
   def __init__(self, master):
@@ -487,18 +472,14 @@ class Control(Frame):
     solveButton.pack(side = LEFT, expand = YES)
 
   def help(self):
-    pass
-
-  def disable(self):
-    self.solveButton.configure(state = DISABLED)
-    self.across.configure(state = DISABLED)
-    self.down.configure(state = DISABLED)
-
-  def enable(self):
-    self.solveButton.configure(state = NORMAL)
-    self.across.configure(state = NORMAL)
-    self.down.configure(state = NORMAL)
-    self.getReady()
+    win = Toplevel()
+    win.withdraw()
+    helpText = "Click on a cell to make a black square.\n"
+    helpText += "Select a black square to enter clues.\n"
+    helpText += "To delete a black square, right-click it.\n"
+    Label(win, text = helpText, font = clueFont, justify = LEFT).pack()
+    Button(win, text = 'Okay', command = win.destroy).pack()
+    displayDialog(win, self.master.master, "Kakuro Help")
 
   def enterAcross(self, value):
     self.enterValue(value, 'A')
@@ -525,7 +506,8 @@ class Control(Frame):
 def main():
   root = Tk()
   root.wm_geometry('615x650')
-  Kakuro(root)
+  app = Kakuro(root)
+  root.wm_protocol('WM_DELETE_WINDOW', app.wrapup)
   root.mainloop()
 
 if __name__ == "__main__":
