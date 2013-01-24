@@ -9,10 +9,11 @@ from Tkinter import *
 from tkMessageBox import *                    # get standard dialogs
 from tkFileDialog import *
 import tkFont
-import time, os.path
+import time, os.path, re
 from kakuroCSP import kakuroCSP, sanityCheck
 
-clueFont = ('helevetica', 12, 'bold')
+clueFont = ('helevetica', 12, 'normal')
+answerFont = ('helvetica', 24, 'bold')
 blackFill = 'dark gray'
 defaultFill = 'white'
 currentFill = 'light blue'
@@ -22,7 +23,7 @@ class ScrolledCanvas(Frame):
     Frame.__init__(self, master)
     canv = Canvas(self, bg=bg, relief=SUNKEN)
     canv.config(width=width, height=height)           # display area size
-    canv.config(scrollregion=(0, 0, width, 2000))     # canvas size corners
+    canv.config(scrollregion=(0, 0, width, height))     # canvas size corners
     canv.config(highlightthickness=0)                 # no pixels to border
 
     sbar = Scrollbar(self)
@@ -32,28 +33,35 @@ class ScrolledCanvas(Frame):
     canv.pack(side=LEFT, expand=YES, fill=BOTH)       # canv clipped first
     self.canvas = canv
 
+
 class Board(ScrolledCanvas):
   # View
 
   def __init__(self, master, width = 600, height = 800, bg = 'white',
                cols = 12, rows = 21, cursor = 'crosshair'):
+
+    ScrolledCanvas.__init__(self, master, width = width, height = height,
+                            bg=bg, cursor=cursor)
+    self.reset(width, rows, cols)
+    self.master = master
+    self.frozen = False
+
+  def reset(self, width, rows, cols):
     rows += 1   # Allow for top and left boundaries
     cols += 1
     cw = ( width-10 ) // cols
     height = cw * rows + 10
-    ScrolledCanvas.__init__(self, master, width = width, height = height,
-                            bg=bg, cursor=cursor)
     self.cellHeight = self.cellWidth = cw
-    self.master = master
+    self.canvas.config(scrollregion=(0, 0, width, height))
     self.createCells(height, width, rows, cols)
-
-    self.frozen = False       # respond to mouse clicks
     self.rows = rows
     self.cols = cols
 
   def createCells(self, height, width, rows, cols):
     # Each cell has a tag starting with R for the row number and a tag starting
-    # with C for the column number.
+    # with C for the column number.  It also has a tag of the form row.col to
+    # allow direct access.  Black squares have two associated text objects,
+    # one for each clue.  These are initially set to empty strings.
 
     canvas = self.canvas
     cw = self.cellWidth
@@ -66,8 +74,9 @@ class Board(ScrolledCanvas):
         rTag = 'R%s' % r
         cTag = 'C%s' % c
         clueTag = 'clue'+rTag + cTag
+        coords = '%d.%d' % (r, c)
         id = canvas.create_rectangle(x, y, x+cw, y+ch, fill = defaultFill,
-                                     tags=('cell', rTag, cTag))
+                                     tags=('cell', rTag, cTag, coords))
         if r == 0 or c == 0:
           canvas.addtag_withtag('black', id)
         if r == 0:
@@ -111,7 +120,6 @@ class Board(ScrolledCanvas):
     rTag = [tag for tag in tags if tag.startswith('R')][0]
     cTag = [tag for tag in tags if tag.startswith('C')][0]
     clueTag = 'clue' + rTag + cTag
-
 
     aText = canvas.itemcget(clueTag+'A', 'text')
     aClue = int(aText) if aText else 0
@@ -160,14 +168,40 @@ class Board(ScrolledCanvas):
       canvas.dtag('current', 'black')
       canvas.itemconfigure('current', fill = defaultFill)
 
+  def showSolution(self, idx):
+    canvas = self.canvas
+    soln = self.master.solns[idx]
+    variables = self.master.vars
+    canvas.delete('solution')
+    for v in variables:
+      coords = '%s.%s' % v
+      cell = canvas.find_withtag(coords)[0]
+      left, top, right, bottom = canvas.bbox(cell)
+      x = (left + right)//2
+      y = (top+bottom)//2
+      canvas.create_text(x, y, anchor=CENTER, fill='dark green',
+                         text = str(soln[v]),
+                         tag='solution', font = answerFont)
+
   def printBoard(self):
-    pass
+    fout = asksaveasfilename( filetypes=[('postscript files', '.ps')],
+                            title='Print to File',
+                            defaultextension='ps')
+    #height = self.cellHeight * self.rows + 5
+    #width  = self.cellWidth * self.cols + 5
+    canvas = self.canvas
+    left, top, right, bottom = canvas.bbox('all')
+
+    if fout:
+      canvas.postscript(colormode="gray", file=fout,
+                        height = bottom-top, width = right-left,
+                        x = 10, y = 10)
 
 class Kakuro(Frame):
 
   def __init__(self, master, bg = 'white', cursor = 'crosshair'):
     Frame.__init__(self, master)
-    self.pack()
+    self.pack(expand = YES, fill = BOTH)
     self.master = master
     self.board = Board(self, bg = bg, cursor=cursor)
     self.control = Control(self)
@@ -176,8 +210,7 @@ class Kakuro(Frame):
     self.board.pack(side=TOP, expand = YES, fill = BOTH)
     self.menu = self.makeMenu(master)
     self.fileSaveDir = '.'        # directory for saving puzzles
-    global clueFont
-    clueFont= tkFont.Font(family = 'Helvetica', size = 12, weight = 'normal')
+    self.fileOpenDir = '.'        # directory for saved puzzles
 
   def setTitle(self):
     b = self.board
@@ -191,7 +224,8 @@ class Kakuro(Frame):
     win.config(menu=top)                           # set its menu option
 
     file = top.file = Menu(top, tearoff = 0)
-    file.add_command(label='New...', command=self.dimensionDialog, underline=0)
+    file.add_command(label='New', command=self.dimensionDialog, underline=0)
+    file.add_command(label='Open', command = self.openFile, underline = 0)
     file.add_command(label='Print', command=self.board.printBoard, underline=0)
     file.add_command(label='Save', command=self.savePuzzle, underline=0)
     file.add_command(label='Quit', command=win.quit, underline=0)
@@ -207,11 +241,16 @@ class Kakuro(Frame):
     across = dict()
     down = dict()
 
+    # unhighlight any highlighted cell
+    canvas.itemconfigure('highlight', fill=blackFill)
+    canvas.dtag('highlight', 'highlight')
+
     # add a sentinel black square to the end of each row and column
     for r in range(rows+1):
       across[r, cols] = 0
     for c in range(cols+1):
       down[rows, c] = 0
+
     for sq in canvas.find_withtag('black'):
       tags = canvas.gettags(sq)
       rTag = [t for t in tags if t.startswith('R')][0]
@@ -221,19 +260,19 @@ class Kakuro(Frame):
       clueTag = 'clue'+rTag+cTag
       try:
         id = canvas.find_withtag(clueTag+'A')[0]
-        across[r, c] = int(canvas.itemcget(id, 'text'))
-      except IndexError:
+        across[r,c] = int(canvas.itemcget(id, 'text'))
+      except (IndexError, ValueError):
         across[r, c] = 0
       try:
         id = canvas.find_withtag(clueTag+'D')[0]
         down[r, c] = int(canvas.itemcget(id, 'text'))
-      except IndexError:
+      except (IndexError, ValueError):
         down[r, c] = 0
 
     aSum = sum(across.values())
     dSum = sum(down.values())
     if aSum != dSum:
-      showerror('Inconcistent Data',
+      showerror('Inconsistent Data',
          'Across clues total %d\nDown clues total %d' % (aSum, dSum))
       return []
 
@@ -249,6 +288,7 @@ class Kakuro(Frame):
       showerror("Invalid Clues", errs)
       self.solns = []
     self.solns, self.vars = kakuroCSP()
+    self.report()
 
   def report(self):
     solns = self.solns
@@ -257,12 +297,12 @@ class Kakuro(Frame):
     elif len(solns) == 1:
       self.menu.file.entryconfigure('Save', state='normal')
       if askyesno('One Solution', 'Display the solution?', default='no'):
-        self.board.printSolution(solns[0])
+        self.board.showSolution(0)
     else:
       for idx, soln in enumerate(solns):
         if askyesno('%d Solutions' % len(solns), 'Display solution number %d?'
                      %(idx+1)):
-          self.board.printSolution(soln)
+          self.board.showSolution(idx)
         else:
           break
 
@@ -282,8 +322,12 @@ class Kakuro(Frame):
     self.colVar = StringVar()
     rowFrame = LabelFrame(win, text = "Rows")
     colFrame = LabelFrame(win, text = "Columns")
-    rowEntry = Entry(rowFrame, textvariable=self.rowVar, width = 6)
-    colEntry = Entry(colFrame, textvariable = self.colVar, width = 6)
+    rowEntry = Scale(rowFrame, variable=self.rowVar, orient = VERTICAL,
+                     from_ = 4, to = 40)
+    colEntry = Scale(colFrame, variable = self.colVar, orient = VERTICAL,
+                     from_ = 4, to = 40)
+    rowEntry.set(self.board.rows-1)
+    colEntry.set(self.board.cols-1)
     rowEntry.pack()
     colEntry.pack()
 
@@ -328,22 +372,56 @@ class Kakuro(Frame):
     rows = int(self.rowVar.get())
     cols = int(self.colVar.get())
     self.drawNew(rows, cols)
-    self.setTitle()
 
   def cancelDim(self):
     self.winDim.destroy()
 
   def drawNew(self, rows, cols):
-    width = self.master.winfo_width() - 15
-    self.board.destroy()
-    self.board = Board(self, width = width, rows = rows, cols = cols)
-    self.board.pack(side=TOP, expand = YES, fill = BOTH)
+    root = self.master
+    board = self.board
+    self.menu.file.entryconfigure('Save', state='disabled')
+    width = root.winfo_width() - 15
+    board.canvas.delete('all')
+    board.reset(width, rows, cols)
+    self.setTitle()
+
+  def openFile(self):
+    # Mainly for development, to avoid having to enter puzzles
+    # over and over
+    fname = askopenfile( filetypes = [('Kakuro Files', '.kro')],
+                         title = 'Open Puzzle File',
+                         defaultextension = 'kro',
+                        initialdir = self.fileOpenDir)
+    if not fname:
+        return
+    self.fileOpenDir = os.path.dirname(fname.name)
+    text = fname.read()
+
+    dimPattern = re.compile(r'(\d+) by (\d+)')
+    rows, cols = dimPattern.search(text).groups()
+    self.drawNew(int(rows), int(cols))
+    canvas = self.board.canvas
+
+    cluePattern = re.compile(r'\d+ +\d+ +\d+ +\d+.*\n')
+    clues = cluePattern.findall(text)
+    for clue in clues:
+      row, col, across, down = clue.split()
+      aTag = 'clueR%sC%sA' % (row, col)
+      dTag = 'clueR%sC%sD' % (row, col)
+      coords = '%s.%s' % (row, col)
+      cell = canvas.find_withtag(coords)
+      canvas.addtag_withtag('black', coords)
+      if across != '0':
+        canvas.itemconfigure(aTag, text = across)
+      if down != '0':
+        canvas.itemconfigure(dTag, text = down)
+    canvas.itemconfigure('black', fill = blackFill)
 
   def savePuzzle(self):
     # Menu item is enabled if and only if the puzzle has been solved
     # and has exactly one solution
-
     board = self.board
+    canvas = board.canvas
     rows = board.rows
     cols = board.cols
     fname = asksaveasfilename( filetypes = [('Kakuro Files', '.kro')],
@@ -355,11 +433,32 @@ class Kakuro(Frame):
     fout = file(fname, 'w')
     fout.write('# %s\n' % os.path.split(fname)[1])
     fout.write('# %s\n' % time.strftime("%A, %d %B %Y %H:%M:%S"))
-    fout.write('dim %d by %d\n' % (rows, cols))
-    fout.write('#\nSolution\n')
+    fout.write('dim %d by %d\n' % (rows-1, cols-1))
+    fout.write('\nBlack Squares\n')
+    fout.write('Row Col Acr Dwn\n\n')
 
-    # **********  TODO ***************
-
+    blacks = canvas.find_withtag('black')
+    blackDict = dict()
+    for black in blacks:
+      tags = canvas.gettags(black)
+      rTag = [t for t in tags if t.startswith('R')][0]
+      cTag = [t for t in tags if t.startswith('C')][0]
+      clueTag = 'clue' + rTag + cTag
+      across = canvas.itemcget(clueTag + 'A', 'text')
+      down = canvas.itemcget(clueTag + 'D', 'text')
+      if not across: across = 0
+      if not down: down = 0
+      r = int(rTag[1:])
+      c = int(cTag[1:])
+      blackDict[r, c] = (across, down)
+    for b in sorted(blackDict):
+      clues = blackDict[b]
+      fout.write('%3s %3s %3s %3s\n' % (b[0], b[1], clues[0], clues[1]))
+    fout.write('\nSolution\n')
+    fout.write('Row Col Ans\n\n')
+    soln = self.solns[0]
+    for white in sorted(soln):
+      fout.write('%3s %3s %3s\n' % (white[0], white[1], soln[white]))
     fout.close()
 
 class Control(Frame):
@@ -368,7 +467,7 @@ class Control(Frame):
     self.canvas = master.board.canvas
     self.master = master
 
-    helpButton = Button(self, text = 'Help')
+    helpButton = Button(self, text = 'Help', command = self.help)
 
     solveButton = Button(self, text = 'Solve',
                               command = master.solve)
@@ -386,6 +485,9 @@ class Control(Frame):
     self.acrossScale.pack(side = LEFT, expand = YES)
     self.downScale.pack(side = LEFT, expand = YES)
     solveButton.pack(side = LEFT, expand = YES)
+
+  def help(self):
+    pass
 
   def disable(self):
     self.solveButton.configure(state = DISABLED)

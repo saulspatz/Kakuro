@@ -28,12 +28,12 @@ def kakuroCSP():
   candidates = {v: set(univ) for v in variables}
   for eq in equations:
     for v in eq.variables:
-      candiates[v] &= domains[eq.clue, len(eq.variables)]
+      candidates[v] &= domains[eq.clue, len(eq.variables)]
 
   # one variable for each white square, with values in range computed above
 
   for v in variables:
-    problem.addVariable(v, tuple(candiates[v]))
+    problem.addVariable(v, tuple(candidates[v]))
 
   for eq in equations:
     # All the numbers in a single sum are distinct
