@@ -397,7 +397,10 @@ class Kakuro(Frame):
 
   def savePuzzle(self):
     # Menu item is enabled if and only if the puzzle has been solved
-    # and has exactly one solution
+    # and has exactly one solution.
+    # If there are more rows than columns, the puzzle is transposed to
+    # better fit a computer screen.
+
     board = self.board
     canvas = board.canvas
     rows = board.rows
@@ -411,7 +414,11 @@ class Kakuro(Frame):
     fout = file(fname, 'w')
     fout.write('# %s\n' % os.path.split(fname)[1])
     fout.write('# %s\n' % time.strftime("%A, %d %B %Y %H:%M:%S"))
-    fout.write('dim %d by %d\n' % (rows-1, cols-1))
+    if rows <= cols:
+      fout.write('dim %d by %d\n' % (rows-1, cols-1))
+    else:
+      fout.write('#Transposed from data entry.\n')
+      fout.write('dim %d by %d\n' % (cols-1, rows-1))
     fout.write('\nBlack Squares\n')
     fout.write('Row Col Acr Dwn\n\n')
 
@@ -428,13 +435,18 @@ class Kakuro(Frame):
       if not down: down = 0
       r = int(rTag[1:])
       c = int(cTag[1:])
-      blackDict[r, c] = (across, down)
+      if rows <= cols:
+        blackDict[r, c] = (across, down)
+      else:
+        blackDict[c, r] = (down, across)
     for b in sorted(blackDict):
       clues = blackDict[b]
       fout.write('%3s %3s %3s %3s\n' % (b[0], b[1], clues[0], clues[1]))
     fout.write('\nSolution\n')
     fout.write('Row Col Ans\n\n')
     soln = self.solns[0]
+    if rows > cols:
+      soln = {(k[1], k[0]):soln[k] for k in soln}
     for white in sorted(soln):
       fout.write('%3s %3s %3s\n' % (white[0], white[1], soln[white]))
     fout.close()
