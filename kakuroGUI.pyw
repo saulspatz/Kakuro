@@ -78,16 +78,16 @@ class DeleteDialog(Dialog):
 class KakuroGUI(object):
   def __init__(self, master, height = 600, width = 600, cursor = 'crosshair',
                bg = 'white'):
-    self.master = win
-    win.title('Kakuro')
-    self.control = Control(self, win)
-    self.board = Board(self, win, rows = 21, cols = 12, height = height,
+    self.master = master
+    master.title('Kakuro')
+    self.control = Control(self, master)
+    self.board = Board(self, master, rows = 21, cols = 12, height = height,
                        width = width, bg = bg, cursor=cursor)
-    self.timer = StopWatch(win)
+    self.timer = StopWatch(master)
 
     win.wm_protocol("WM_DELETE_WINDOW", self.control.onClose)
 
-    self.menu = self.makeMenu(win)
+    self.menu = self.makeMenu(master)
     self.fileOpenDir = '.'    # directory for puzzle files
 
     self.timer.pack()

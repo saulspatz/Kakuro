@@ -14,21 +14,6 @@ class CandidateError(Exception):
     def __init__(self, cells):
         self.cells = cells
 
-class Cage(list):
-    def __init__(self, op, val, cells, color):
-        self.op = op
-        self.value = val
-        self.color = color
-        for c in cells:
-            self.append( (int(c[0]), int(c[1])) )
-
-    def __str__(self):
-        answer = '%s %s %s' %(self.op, str(self.value), '[ ')
-        for cell in sorted(self):
-            answer = answer + "%d%d " % (cell[0], cell[1])
-        answer = answer + ( '] %d' % self.color )
-        return answer
-
 class Update(object):
     def __init__(self, coords, ans, cand):
         self.coords, self.answer, self.candidates = coords, ans, cand
@@ -44,13 +29,10 @@ class Puzzle(object):
 
             return (1+idx // dim, 1 + idx % dim)
 
-        self.cages        = []
         self.solution     = {}
         self.history      = []
         self.answer       = {}
         self.candidates   = {}
-        self.oneCellCages = []
-        self.cageID       = {}     # map cell to its cage
         self.parent       = parent
 
         # use pyparsing to parse input file
@@ -524,7 +506,7 @@ class Puzzle(object):
 
 
     def goodAnswer(self, cage, focus, value):
-        # Precondition: Evey cell in cage, except focus, has an filled in
+        # Precondition: Evey cell in cage, except focus, has an answer filled in
         # Return true iff filling value into focus makes the
         # arithmetic work out
 

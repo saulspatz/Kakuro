@@ -12,197 +12,15 @@ import tkFont
 import time, os.path, re
 from kakuroCSP import kakuroCSP, sanityCheck
 from utilities import displayDialog
+from board import Board
 
-clueFont = ('helevetica', 12, 'normal')
-answerFont = ('helvetica', 24, 'bold')
-blackFill = 'dark gray'
-defaultFill = 'white'
-currentFill = 'light blue'
-
-class ScrolledCanvas(Frame):
-  def __init__(self, master, width, height, bg, cursor):
-    Frame.__init__(self, master)
-    canv = Canvas(self, bg=bg, relief=SUNKEN)
-    canv.config(width=width, height=height)           # display area size
-    canv.config(scrollregion=(0, 0, width, height))     # canvas size corners
-    canv.config(highlightthickness=0)                 # no pixels to border
-
-    sbar = Scrollbar(self)
-    sbar.config(command=canv.yview)                   # xlink sbar and canv
-    canv.config(yscrollcommand=sbar.set)              # move one moves other
-    sbar.pack(side=RIGHT, fill=Y)                     # pack first=clip last
-    canv.pack(side=LEFT, expand=YES, fill=BOTH)       # canv clipped first
-    self.canvas = canv
-
-
-class Board(ScrolledCanvas):
-  # View
-
-  def __init__(self, master, width = 600, height = 800, bg = 'white',
-               cols = 12, rows = 21, cursor = 'crosshair'):
-
-    ScrolledCanvas.__init__(self, master, width = width, height = height,
-                            bg=bg, cursor=cursor)
-    self.reset(width, rows, cols)
-    self.master = master
-
-  def reset(self, width, rows, cols):
-    rows += 1   # Allow for top and left boundaries
-    cols += 1
-    cw = ( width-10 ) // cols
-    height = cw * rows + 10
-    self.cellHeight = self.cellWidth = cw
-    self.canvas.config(scrollregion=(0, 0, width, height))
-    self.createCells(height, width, rows, cols)
-    self.rows = rows
-    self.cols = cols
-
-  def createCells(self, height, width, rows, cols):
-    # Each cell has a tag starting with R for the row number and a tag starting
-    # with C for the column number.  It also has a tag of the form row.col to
-    # allow direct access.  Black squares have two associated text objects,
-    # one for each clue.  These are initially set to empty strings.
-
-    canvas = self.canvas
-    cw = self.cellWidth
-    ch = self.cellHeight
-    self.x0 = ( width - cols * cw ) // 2          # cell origin is (x0, y0)
-    self.y0 = ( height - rows * ch ) // 2
-
-    for c, x in enumerate(range(self.x0, self.x0+cols*cw, cw)):
-      for r, y in enumerate(range(self.y0,  self.y0+rows*ch, ch)):
-        rTag = 'R%s' % r
-        cTag = 'C%s' % c
-        clueTag = 'clue'+rTag + cTag
-        coords = '%d.%d' % (r, c)
-        id = canvas.create_rectangle(x, y, x+cw, y+ch, fill = defaultFill,
-                                     tags=('cell', rTag, cTag, coords))
-        if r == 0 or c == 0:
-          canvas.addtag_withtag('black', id)
-        if r == 0:
-          canvas.addtag_withtag('top', id)
-        if c == 0:
-          canvas.addtag_withtag('left', id)
-        if r == rows-1:
-          canvas.addtag_withtag('bottom', id)
-        if c == cols-1:
-          canvas.addtag_withtag('right', id)
-        canvas.create_text(x+cw-2, y+2, anchor = NE, tag = clueTag+'A',
-                           text = '', font = clueFont)
-        canvas.create_text(x+2, y+ch-2, anchor = SW, tag = clueTag+'D',
-                                   text = '', font = clueFont)
-    canvas.itemconfigure('black', fill = blackFill)
-    canvas.tag_bind('cell', '<ButtonPress-1>', self.onClick)
-    canvas.tag_bind('cell', '<ButtonPress-3>', self.onRightClick)
-
-  def onClick(self, event):
-
-    canvas = event.widget
-    control = self.master.control
-    acrossScale = control.acrossScale
-    downScale = control.downScale
-
-    acrossScale.configure(state = DISABLED)
-    downScale.configure(state = DISABLED)
-
-    # first unhighlight the current cell
-
-    canvas.itemconfigure('highlight', fill=blackFill)
-    canvas.dtag('highlight', 'highlight')
-
-    obj = canvas.find_withtag('current')
-    canvas.addtag_withtag('highlight', obj)
-    canvas.addtag_withtag('black', obj)
-    canvas.itemconfigure(obj, fill = currentFill)
-
-    tags = canvas.gettags('current')
-    rTag = [tag for tag in tags if tag.startswith('R')][0]
-    cTag = [tag for tag in tags if tag.startswith('C')][0]
-    clueTag = 'clue' + rTag + cTag
-
-    aText = canvas.itemcget(clueTag+'A', 'text')
-    aClue = int(aText) if aText else 0
-    acrossScale.configure(state = NORMAL)
-    acrossScale.set(aClue)
-    if 'top' in tags or 'right' in tags:
-      acrossScale.configure(state = DISABLED)
-
-    dText = canvas.itemcget(clueTag+'D', 'text')
-    dClue = int(dText) if dText else 0
-    downScale.configure(state = NORMAL)
-    downScale.set(dClue)
-    if 'bottom' in tags or 'left' in tags:
-      downScale.configure(state = DISABLED)
-
-  def onRightClick(self, event):
-
-    # Unselect a black square
-
-    canvas = event.widget
-
-    control = self.master.control
-    acrossScale = control.acrossScale
-    downScale = control.downScale
-
-    # first unhighlight the highlighted cell
-
-    canvas.itemconfigure('highlight', fill=blackFill)
-    canvas.dtag('highlight', 'highlight')
-
-    # Erase any clues
-    tags = canvas.gettags('current')
-    rTag = [tag for tag in tags if tag.startswith('R')][0]
-    cTag = [tag for tag in tags if tag.startswith('C')][0]
-    clueTag = 'clue' + rTag + cTag
-    for scale in (acrossScale, downScale):
-      scale.configure(state = NORMAL)
-      scale.set(0)
-      scale.configure(state = DISABLED)
-    for d in ('A', 'D'):
-      canvas.itemconfigure(clueTag+d, text = '')
-
-    if 'top' not in tags and 'left' not in tags:
-      canvas.dtag('current', 'black')
-      canvas.itemconfigure('current', fill = defaultFill)
-
-  def showSolution(self, idx):
-    canvas = self.canvas
-    master = self.master
-    soln = master.solns[idx]
-    variables = master.vars
-    canvas.delete('solution')
-    for v in variables:
-      coords = '%s.%s' % v
-      cell = canvas.find_withtag(coords)[0]
-      left, top, right, bottom = canvas.bbox(cell)
-      x = (left + right)//2
-      y = (top+bottom)//2
-      canvas.create_text(x, y, anchor=CENTER, fill='dark green',
-                         text = str(soln[v]),
-                         tag='solution', font = answerFont)
-    master.menu.file.entryconfigure('Clear', state = NORMAL)
-
-  def printBoard(self):
-    fout = asksaveasfilename( filetypes=[('postscript files', '.ps')],
-                            title='Print to File',
-                            defaultextension='ps')
-    #height = self.cellHeight * self.rows + 5
-    #width  = self.cellWidth * self.cols + 5
-    canvas = self.canvas
-    left, top, right, bottom = canvas.bbox('all')
-
-    if fout:
-      canvas.postscript(colormode="gray", file=fout,
-                        height = bottom-top, width = right-left,
-                        x = 10, y = 10)
-
-class Kakuro(Frame):
+class KakuroSolver(Frame):
 
   def __init__(self, master, bg = 'white', cursor = 'crosshair'):
     Frame.__init__(self, master)
     self.pack(expand = YES, fill = BOTH)
     self.master = master
-    self.board = Board(self, bg = bg, cursor=cursor)
+    self.board = Board(self, master, bg = bg, cursor=cursor)
     self.control = Control(self)
     self.setTitle()
     self.control.pack(side=BOTTOM, expand=YES, fill = X)
@@ -461,7 +279,7 @@ class Kakuro(Frame):
 class Control(Frame):
   def __init__(self, master):
     Frame.__init__(self, master)
-    self.canvas = master.board.canvas
+    self.board = master.board
     self.master = master
 
     helpButton = Button(self, text = 'Help', command = self.help)
@@ -518,7 +336,7 @@ class Control(Frame):
 def main():
   root = Tk()
   root.wm_geometry('615x650')
-  app = Kakuro(root)
+  app = KakuroSolver(root)
   root.wm_protocol('WM_DELETE_WINDOW', app.wrapup)
   root.mainloop()
 

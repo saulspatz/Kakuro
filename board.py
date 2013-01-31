@@ -1,35 +1,197 @@
 from Tkinter import *
 import time
 from puzzle import Update
+from utilities import ScrolledCanvas
 
-NONE = ' '
-ADD = '+'
-SUB = u'\u2212'
-MUL =u'\xd7'
-DIV = '/'
+clueFont = ('helevetica', 12, 'normal')
+answerFont = ('helvetica', 24, 'bold')
+blackFill = 'dark gray'
+defaultFill = 'white'
+currentFill = 'light blue'
 
-operation = {"ADD":ADD, "SUB":SUB, "MUL":MUL, "DIV":DIV, "NONE":NONE}
-clueFont = ('helevetica', 12, 'bold')
-solutionFont = ('heletica', 20, 'bold')
-candidateFont = ('courier', 10, 'bold')
-cageColor = ('#FFDCA0', '#F0C8C8', '#DCFFFF', '#C4C4FF', '#E5D6B4', '#D6ED84')
+class Board(ScrolledCanvas):
+  # View
+
+  def __init__(self, master, width = 600, height = 800, bg = 'white',
+               cols = 12, rows = 21, cursor = 'crosshair'):
+
+    ScrolledCanvas.__init__(self, master, width = width, height = height,
+                            bg=bg, cursor=cursor)
+    self.reset(width, rows, cols)
+    self.master = master
+
+  def reset(self, width, rows, cols):
+    rows += 1   # Allow for top and left boundaries
+    cols += 1
+    cw = ( width-10 ) // cols
+    height = cw * rows + 10
+    self.cellHeight = self.cellWidth = cw
+    self.canvas.config(scrollregion=(0, 0, width, height))
+    self.createCells(height, width, rows, cols)
+    self.rows = rows
+    self.cols = cols
+
+  def createCells(self, height, width, rows, cols):
+    # Each cell has a tag starting with R for the row number and a tag starting
+    # with C for the column number.  It also has a tag of the form row.col to
+    # allow direct access.  Black squares have two associated text objects,
+    # one for each clue.  These are initially set to empty strings.
+
+    canvas = self.canvas
+    cw = self.cellWidth
+    ch = self.cellHeight
+    self.x0 = ( width - cols * cw ) // 2          # cell origin is (x0, y0)
+    self.y0 = ( height - rows * ch ) // 2
+
+    for c, x in enumerate(range(self.x0, self.x0+cols*cw, cw)):
+      for r, y in enumerate(range(self.y0,  self.y0+rows*ch, ch)):
+        rTag = 'R%s' % r
+        cTag = 'C%s' % c
+        clueTag = 'clue'+rTag + cTag
+        coords = '%d.%d' % (r, c)
+        id = canvas.create_rectangle(x, y, x+cw, y+ch, fill = defaultFill,
+                                     tags=('cell', rTag, cTag, coords))
+        if r == 0 or c == 0:
+          canvas.addtag_withtag('black', id)
+        if r == 0:
+          canvas.addtag_withtag('top', id)
+        if c == 0:
+          canvas.addtag_withtag('left', id)
+        if r == rows-1:
+          canvas.addtag_withtag('bottom', id)
+        if c == cols-1:
+          canvas.addtag_withtag('right', id)
+        canvas.create_text(x+cw-2, y+2, anchor = NE, tag = clueTag+'A',
+                           text = '', font = clueFont)
+        canvas.create_text(x+2, y+ch-2, anchor = SW, tag = clueTag+'D',
+                                   text = '', font = clueFont)
+    canvas.itemconfigure('black', fill = blackFill)
+    self.enableSolver()
+
+  def enableSolver(self):
+    canvas.tag_bind('cell', '<ButtonPress-1>', self.solverLeftClick)
+    canvas.tag_bind('cell', '<ButtonPress-3>', self.solverRightClick)
+
+  def disableSolver(self):
+    canvas.tag_bind('cell', '<ButtonPress-1>', lambda event:None)
+    canvas.tag_bind('cell', '<ButtonPress-3>', lambda event:None)
+
+  def solverLeftClick(self, event):
+
+    canvas = event.widget
+    control = self.master.control
+    acrossScale = control.acrossScale
+    downScale = control.downScale
+
+    acrossScale.configure(state = DISABLED)
+    downScale.configure(state = DISABLED)
+
+    # first unhighlight the current cell
+
+    canvas.itemconfigure('highlight', fill=blackFill)
+    canvas.dtag('highlight', 'highlight')
+
+    obj = canvas.find_withtag('current')
+    canvas.addtag_withtag('highlight', obj)
+    canvas.addtag_withtag('black', obj)
+    canvas.itemconfigure(obj, fill = currentFill)
+
+    tags = canvas.gettags('current')
+    rTag = [tag for tag in tags if tag.startswith('R')][0]
+    cTag = [tag for tag in tags if tag.startswith('C')][0]
+    clueTag = 'clue' + rTag + cTag
+
+    aText = canvas.itemcget(clueTag+'A', 'text')
+    aClue = int(aText) if aText else 0
+    acrossScale.configure(state = NORMAL)
+    acrossScale.set(aClue)
+    if 'top' in tags or 'right' in tags:
+      acrossScale.configure(state = DISABLED)
+
+    dText = canvas.itemcget(clueTag+'D', 'text')
+    dClue = int(dText) if dText else 0
+    downScale.configure(state = NORMAL)
+    downScale.set(dClue)
+    if 'bottom' in tags or 'left' in tags:
+      downScale.configure(state = DISABLED)
+
+  def solverRightClick(self, event):
+
+    # Unselect a black square
+
+    canvas = event.widget
+
+    control = self.master.control
+    acrossScale = control.acrossScale
+    downScale = control.downScale
+
+    # first unhighlight the highlighted cell
+
+    canvas.itemconfigure('highlight', fill=blackFill)
+    canvas.dtag('highlight', 'highlight')
+
+    # Erase any clues
+    tags = canvas.gettags('current')
+    rTag = [tag for tag in tags if tag.startswith('R')][0]
+    cTag = [tag for tag in tags if tag.startswith('C')][0]
+    clueTag = 'clue' + rTag + cTag
+    for scale in (acrossScale, downScale):
+      scale.configure(state = NORMAL)
+      scale.set(0)
+      scale.configure(state = DISABLED)
+    for d in ('A', 'D'):
+      canvas.itemconfigure(clueTag+d, text = '')
+
+    if 'top' not in tags and 'left' not in tags:
+      canvas.dtag('current', 'black')
+      canvas.itemconfigure('current', fill = defaultFill)
+
+  def showSolution(self, idx):
+    canvas = self.canvas
+    master = self.master
+    soln = master.solns[idx]
+    variables = master.vars
+    canvas.delete('solution')
+    for v in variables:
+      coords = '%s.%s' % v
+      cell = canvas.find_withtag(coords)[0]
+      left, top, right, bottom = canvas.bbox(cell)
+      x = (left + right)//2
+      y = (top+bottom)//2
+      canvas.create_text(x, y, anchor=CENTER, fill='dark green',
+                         text = str(soln[v]),
+                         tag='solution', font = answerFont)
+    master.menu.file.entryconfigure('Clear', state = NORMAL)
+
+  def printBoard(self):
+    fout = asksaveasfilename( filetypes=[('postscript files', '.ps')],
+                            title='Print to File',
+                            defaultextension='ps')
+    canvas = self.canvas
+    left, top, right, bottom = canvas.bbox('all')
+
+    if fout:
+      canvas.postscript(colormode="gray", file=fout,
+                        height = bottom-top, width = right-left,
+                        x = 10, y = 10)
 
 class Board(Canvas):
     # View
 
     def __init__(self, parent, win, height = 600, width = 600,
-                 bg = 'white', dim = 9, cursor = 'crosshair'):
+                 bg = 'white', rows = 21, cols = 12, cursor = 'crosshair'):
         Canvas.__init__(self, win, height=height, width=width,
                         bg=bg, cursor=cursor)
         self.parent = parent
-        msg = '  To begin, open a puzzle file (.ken)\nor load a saved partial solution (.kip)'
-        self.create_text(width//2, height//2, text= msg, font = solutionFont)
+        self.rows = rows
+        self.cols = cols
 
-    def draw(self, dim):
+    def draw(self, rows, cols):
         self.bind('<Configure>', self.redraw)
         width = self.winfo_width()
         height= self.winfo_height()
-        self.dim = dim
+        self.rows = rows
+        self.cols = cols
         self.createCells(height, width)
 
         control = self.parent.control
@@ -56,62 +218,6 @@ class Board(Canvas):
             self.enterCell(self.focus)
         except (AttributeError, TypeError):
             pass
-
-    def createCells(self, height, width):
-        dim = self.dim
-        self.cellWidth  =  cw = (width - 10 ) // dim
-        self.cellHeight = ch = (height - 10 ) // dim
-        self.x0 = ( width - dim * cw ) // 2          # cell origin is (x0, y0)
-        self.y0 = ( height - dim * ch ) // 2
-
-        for j, x in enumerate(range(self.x0, self.x0+dim*cw, cw)):
-            for k, y in enumerate(range(self.y0,  self.y0+dim*ch, ch)):
-                tag = 'rect%d%d' % (j, k)
-                id = self.create_rectangle(x, y, x +cw, y+ ch, tag = tag)
-
-    def drawCage(self, cage):
-        x0      = self.x0
-        y0      = self.y0
-        ch      = self.cellHeight
-        cw      = self.cellWidth
-        op      = cage.op
-        value   = cage.value
-        bground = cageColor[cage.color]
-
-        for (j, k) in cage:
-            self.itemconfigure('rect%d%d' % (j, k), fill = bground)
-            w = x0 + j*cw
-            e = w + cw
-            n = y0 + k*ch
-            s = n + ch
-            if (j-1, k) not in cage:
-                self.create_line(w, n, w, s, width=3, fill='black')  #western bdry
-            if (j+1, k) not in cage:
-                self.create_line(e, n, e,  s, width=3, fill='black')  #eastern bdry
-            if (j, k-1) not in cage:
-                self.create_line(w, n, e, n, width=3, fill='black')   # northern bdry
-            if (j, k+1) not in cage:
-                self.create_line(w, s, e, s, width=3, fill='black')    # southern bdry
-            atag = 'a%d%d' % (j, k)
-            ctag = 'c%d%d' % (j, k)
-            x = (e + w) // 2
-            y = (n + s) // 2
-            self.create_text(x, y, text='', font = solutionFont, anchor = CENTER,
-                             tag = atag, fill = 'black')
-            self.addtag_withtag('atext', atag)
-            x = e - 2
-            y = n + 15
-            self.create_text(x, y, text = '', font = candidateFont, tag = ctag,
-                         anchor = NE, justify = LEFT, fill = 'black')
-            self.addtag_withtag('ctext', ctag)
-
-        # formula in upper lefthand corner
-
-        kmin = min([k for (j,k) in cage])
-        jmin = min([j for(j, k) in cage if k == kmin])
-        j, k = x0+cw*jmin+4, y0 + ch*kmin+2
-        self.create_text(j, k, text='%s %s' % (value,operation[op]),
-                         font = clueFont, anchor = NW, fill = 'black', tag = 'formula')
 
     def clearAll(self):
         objects = self.find_all()
@@ -225,8 +331,8 @@ class Board(Canvas):
         self.activate()
 
     def deactivate(self):
-        # Replace the 'Board' bindatg by 'Canvas'.
-        # See defininition of Coontrol in control.py
+        # Replace the 'Board' bindtag by 'Canvas'.
+        # See defininition of Control in control.py
         # Board will no longer respond to keypresses and mouseclicks
 
         tags = self.bindtags()

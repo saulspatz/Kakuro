@@ -1,5 +1,33 @@
 # utilities.py
 
+from Tkinter import *
+
+class ScrolledCanvas(Frame):
+  def __init__(self, master, width, height, bg, cursor):
+    Frame.__init__(self, master)
+    canv = Canvas(self, bg=bg, relief=SUNKEN)
+    canv.config(width=width, height=height)           # display area size
+    canv.config(scrollregion=(0, 0, width, height))   # canvas size corners
+    canv.config(highlightthickness=0)                 # no pixels to border
+
+    ybar = Scrollbar(self)
+    ybar.config(command=canv.yview)                   # xlink sbar and canv
+    canv.config(yscrollcommand=ybar.set)              # move one moves other
+
+    xbar = Scrollbar(self)
+    xbar.config(command=canv.xview)                   # xlink sbar and canv
+    canv.config(xscrollcommand=xbar.set)              # move one moves other
+
+    canv.grid(row = 0, column = 0, sticky = 'news')
+    ybar.grid(row = 0, column = 1, sticky = 'ns')
+    xbar.grid(row = 1, column = 0, sticky = 'ew')
+    self.rowconfigure(0, weight = 1)
+    self.columnconfigure(0, weight = 1)
+    self.canvas = canv
+
+  def __getattr__(self, name):
+    return getattr(self.canavs, attr)
+
 def displayDialog(win, master, title, modal = False):
   # Win is the toplevel for the dialog
   # master is typically the app main window

@@ -1,6 +1,5 @@
 from Tkinter import *
 from puzzle import AnswerError, CandidateError
-from puzzle import Cage         # for getCages
 from puzzle import Update
 
 class Control(Frame):
