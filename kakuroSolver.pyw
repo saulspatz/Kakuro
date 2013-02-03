@@ -10,11 +10,12 @@ from tkMessageBox import *                    # get standard dialogs
 from tkFileDialog import *
 import tkFont
 import time, os.path, re
-from kakuroCSP import kakuroCSP, sanityCheck
+import kakuroCSP, thread
 from utilities import displayDialog
 
 clueFont = ('helevetica', 12, 'normal')
 answerFont = ('helvetica', 24, 'bold')
+noticeFont = ('helvetica', 18, 'bold')
 blackFill = 'dark gray'
 defaultFill = 'white'
 currentFill = 'light blue'
@@ -24,7 +25,7 @@ class ScrolledCanvas(Frame):
     Frame.__init__(self, master)
     canv = Canvas(self, bg=bg, relief=SUNKEN)
     canv.config(width=width, height=height)           # display area size
-    canv.config(scrollregion=(0, 0, width, height))     # canvas size corners
+    canv.config(scrollregion=(0, 0, width, height))   # canvas size corners
     canv.config(highlightthickness=0)                 # no pixels to border
 
     sbar = Scrollbar(self)
@@ -287,14 +288,39 @@ class Kakuro(Frame):
          'Across clues total %d\nDown clues total %d' % (aSum, dSum))
       return []
 
-    bad = sanityCheck(rows, cols, across, down)
+    bad = kakuroCSP.sanityCheck(rows, cols, across, down)
     if bad:
       errs = ["row %2s col %2s: Can't make %2d in %s\n" % b for b in bad]
       self.errorDialog('\n'.join(errs))
       return []
 
-    self.solns, self.vars = kakuroCSP()
+    left, top, right, bottom = canvas.bbox('all')
+    canvas.create_text(left+20, top+20, anchor = NW, text = "Solving 00:00",
+                                fill = 'yellow', font = noticeFont,
+                                tag = 'notice')
+    start = time.time()
+    kakuroCSP.solverDone = False
+    solver = thread.start_new_thread(kakuroCSP.kakuroCSP, ())
+    while not kakuroCSP.solverDone:
+      elapsed = int(time.time() - start)
+      if elapsed >= 3600:
+        hours = elapsed // 3600
+        elapsed -= 3600*hours
+        minutes = elapsed // 60
+        seconds = elapsed % 60
+        timeText = 'Solving %d:%02d:%02d' % (hours, minutes, seconds)
+      else:
+        minutes = elapsed // 60
+        seconds = elapsed % 60
+        timeText = 'Solving %02d:%02d' % (minutes, seconds)
+      canvas.itemconfigure('notice', text = timeText)
+      canvas.update_idletasks()
+
+    self.solns = kakuroCSP.solutions
+    self.vars  = kakuroCSP.variables
+
     self.report()
+    self.board.canvas.delete('notice')   # solution timer created this object
 
   def errorDialog(self, errs):
     win = Toplevel()
