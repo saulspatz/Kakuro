@@ -196,7 +196,7 @@ class KakuroSolver(Frame):
     dimPattern = re.compile(r'(\d+) by (\d+)')
     rows, cols = dimPattern.search(text).groups()
     self.drawNew(int(rows), int(cols))
-    canvas = self.board.canvas
+
 
     cluePattern = re.compile(r'\d+ +\d+ +\d+ +\d+.*\n')
     clues = cluePattern.findall(text)

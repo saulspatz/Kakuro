@@ -14,6 +14,8 @@ from tkFileDialog import *
 import tkFont
 import time, os.path, re
 from board import Board
+from utilities import displayDialog
+from control import SolverControl
 
 class Kakuro(Frame):
 
@@ -21,9 +23,9 @@ class Kakuro(Frame):
     Frame.__init__(self, master)
     self.pack(expand = YES, fill = BOTH)
     self.board = Board(self, bg = bg, cursor=cursor)
-    #self.control = Control(self)
+    self.control = SolverControl(self)
     self.setTitle()
-    #self.control.pack(side=BOTTOM, expand=YES, fill = X)
+    self.control.pack(side=BOTTOM, expand=YES, fill = X)
     self.board.pack(side=TOP, expand = YES, fill = BOTH)
     self.menu = self.makeMenu()
     self.fileSaveDir = '.'        # directory for saving puzzles
@@ -88,12 +90,8 @@ class Kakuro(Frame):
     self.drawNew(rows, cols)
 
   def drawNew(self, rows, cols):
-    root = self.master
-    board = self.board
     self.menu.file.entryconfigure('Save', state = DISABLED)
-    width = root.winfo_width() - 15
-    board.delete('all')
-    board.reset(width, rows, cols)
+    self.board.drawNew(rows, cols)
     self.setTitle()
 
   def openFile(self):
@@ -111,22 +109,9 @@ class Kakuro(Frame):
     dimPattern = re.compile(r'(\d+) by (\d+)')
     rows, cols = dimPattern.search(text).groups()
     self.drawNew(int(rows), int(cols))
-    canvas = self.board.canvas
-
     cluePattern = re.compile(r'\d+ +\d+ +\d+ +\d+.*\n')
     clues = cluePattern.findall(text)
-    for clue in clues:
-      row, col, across, down = clue.split()
-      aTag = 'clueR%sC%sA' % (row, col)
-      dTag = 'clueR%sC%sD' % (row, col)
-      coords = '%s.%s' % (row, col)
-      cell = canvas.find_withtag(coords)
-      canvas.addtag_withtag('black', coords)
-      if across != '0':
-        canvas.itemconfigure(aTag, text = across)
-      if down != '0':
-        canvas.itemconfigure(dTag, text = down)
-    canvas.itemconfigure('black', fill = blackFill)
+    self.board.displayClues(clues)
 
   def savePuzzle(self):
     # Menu item is enabled if and only if the puzzle has been solved

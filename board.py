@@ -1,4 +1,5 @@
 from Tkinter import *
+from tkFileDialog import *
 import time
 from puzzle import Update
 from utilities import ScrolledCanvas
@@ -177,6 +178,27 @@ class Board(ScrolledCanvas):
 
   def clearSolution(self):
     self.itemconfigure('solution', fill= defaultFill)
+
+  def drawNew(self, rows, cols):
+    root = self.winfo_toplevel()
+    width = root.winfo_width() - 15
+    self.delete('all')
+    self.reset(width, rows, cols)
+
+  def displayClues(self, clues):
+    canvas = self.canvas
+    for clue in clues:
+      row, col, across, down = clue.split()
+      aTag = 'clueR%sC%sA' % (row, col)
+      dTag = 'clueR%sC%sD' % (row, col)
+      coords = '%s.%s' % (row, col)
+      cell = canvas.find_withtag(coords)
+      canvas.addtag_withtag('black', coords)
+      if across != '0':
+        canvas.itemconfigure(aTag, text = across)
+      if down != '0':
+        canvas.itemconfigure(dTag, text = down)
+    canvas.itemconfigure('black', fill = blackFill)
 
 #class Board(Canvas):
     ## View
