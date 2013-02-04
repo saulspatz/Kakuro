@@ -20,7 +20,7 @@ class KakuroSolver(Frame):
     Frame.__init__(self, master)
     self.pack(expand = YES, fill = BOTH)
     self.master = master
-    self.board = Board(self, master, bg = bg, cursor=cursor)
+    self.board = Board(self, bg = bg, cursor=cursor)
     self.control = Control(self)
     self.setTitle()
     self.control.pack(side=BOTTOM, expand=YES, fill = X)

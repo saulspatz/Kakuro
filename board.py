@@ -13,10 +13,10 @@ class Board(ScrolledCanvas):
   # View
 
   def __init__(self, master, width = 600, height = 800, bg = 'white',
-               cols = 12, rows = 21, cursor = 'crosshair'):
+               cols = 12, rows = 21, cursor = 'crosshair', scrolls = BOTH):
 
     ScrolledCanvas.__init__(self, master, width = width, height = height,
-                            bg=bg, cursor=cursor)
+                            bg=bg, cursor=cursor, scrolls = scrolls)
     self.reset(width, rows, cols)
     self.master = master
 
@@ -69,12 +69,12 @@ class Board(ScrolledCanvas):
     self.enableSolver()
 
   def enableSolver(self):
-    canvas.tag_bind('cell', '<ButtonPress-1>', self.solverLeftClick)
-    canvas.tag_bind('cell', '<ButtonPress-3>', self.solverRightClick)
+    self.tag_bind('cell', '<ButtonPress-1>', self.solverLeftClick)
+    self.tag_bind('cell', '<ButtonPress-3>', self.solverRightClick)
 
   def disableSolver(self):
-    canvas.tag_bind('cell', '<ButtonPress-1>', lambda event:None)
-    canvas.tag_bind('cell', '<ButtonPress-3>', lambda event:None)
+    self.tag_bind('cell', '<ButtonPress-1>', lambda event:None)
+    self.tag_bind('cell', '<ButtonPress-3>', lambda event:None)
 
   def solverLeftClick(self, event):
 
@@ -175,175 +175,168 @@ class Board(ScrolledCanvas):
                         height = bottom-top, width = right-left,
                         x = 10, y = 10)
 
-class Board(Canvas):
-    # View
+  def clearSolution(self):
+    self.itemconfigure('solution', fill= defaultFill)
 
-    def __init__(self, parent, win, height = 600, width = 600,
-                 bg = 'white', rows = 21, cols = 12, cursor = 'crosshair'):
-        Canvas.__init__(self, win, height=height, width=width,
-                        bg=bg, cursor=cursor)
-        self.parent = parent
-        self.rows = rows
-        self.cols = cols
+#class Board(Canvas):
+    ## View
 
-    def draw(self, rows, cols):
-        self.bind('<Configure>', self.redraw)
-        width = self.winfo_width()
-        height= self.winfo_height()
-        self.rows = rows
-        self.cols = cols
-        self.createCells(height, width)
+    #def draw(self, rows, cols):
+        #self.bind('<Configure>', self.redraw)
+        #width = self.winfo_width()
+        #height= self.winfo_height()
+        #self.rows = rows
+        #self.cols = cols
+        #self.createCells(height, width)
 
-        control = self.parent.control
-        for cage in control.getCages():
-            self.drawCage(cage)
-        updates = control.getEntries()
-        self.postUpdates(updates)
+        #control = self.parent.control
+        #for cage in control.getCages():
+            #self.drawCage(cage)
+        #updates = control.getEntries()
+        #self.postUpdates(updates)
 
-        self.focusFill = None
-        self.enterCell((0,0))         # initial focus in upper lefthand corner
-        self.focus_set()              # make canvas respond to keystrokes
+        #self.focusFill = None
+        #self.enterCell((0,0))         # initial focus in upper lefthand corner
+        #self.focus_set()              # make canvas respond to keystrokes
 
-        self.activate()               # activate event bindings
+        #self.activate()               # activate event bindings
 
-    def redraw(self, event):
-        self.clearAll()
-        self.createCells(event.height, event.width)
-        control = self.parent.control
-        for cage in control.getCages():
-            self.drawCage(cage)
-        updates = control.getEntries()
-        self.postUpdates(updates)
-        try:
-            self.enterCell(self.focus)
-        except (AttributeError, TypeError):
-            pass
+    #def redraw(self, event):
+        #self.clearAll()
+        #self.createCells(event.height, event.width)
+        #control = self.parent.control
+        #updates = control.getEntries()
+        #self.postUpdates(updates)
+        #try:
+            #self.enterCell(self.focus)
+        #except (AttributeError, TypeError):
+            #pass
 
-    def clearAll(self):
-        objects = self.find_all()
-        for object in objects:
-            self.delete(object)
+    #def clearAll(self):
+        #objects = self.find_all()
+        #for object in objects:
+            #self.delete(object)
 
-    def drawNew(self, dim):
-        # Draw a new board
+    #def drawNew(self, dim):
+        ## Draw a new board
 
-        self.parent.setTitle()
-        self.clearAll()
-        self.createCells(self.winfo_height(), self.winfo_width(), dim)
+        #self.parent.setTitle()
+        #self.clearAll()
+        #self.createCells(self.winfo_height(), self.winfo_width(), dim)
 
-    def highlight(self, cells, color='white', num = 2):
-        # Flash given cells in the given highlight color, num times
-        # It is assumed that the highlight color will never be the
-        # background color of a cell, except perhaps for the cell that
-        # has the focus.
+    #def highlight(self, cells, color='white', num = 2):
+        ## Flash given cells in the given highlight color, num times
+        ## It is assumed that the highlight color will never be the
+        ## background color of a cell, except perhaps for the cell that
+        ## has the focus.
 
-        rects = []
-        for cell in cells:
-            tag = 'rect%d%d' %cell
-            bg  = self.itemcget(tag, 'fill')
-            if bg != color:
-                rects.append((tag, bg, color))
-            else:
-                rects.append((tag, color, self.focusFill))
-        for k in range(num):
-            for tag, bg, col in rects:
-                self.itemconfigure(tag, fill = col)
-            self.update_idletasks()
-            time.sleep(.1)
-            for tag, bg, col in rects:
-                self.itemconfigure(tag, fill = bg)
-            self.update_idletasks()
-            time.sleep(.1)
+        #rects = []
+        #for cell in cells:
+            #tag = 'rect%d%d' %cell
+            #bg  = self.itemcget(tag, 'fill')
+            #if bg != color:
+                #rects.append((tag, bg, color))
+            #else:
+                #rects.append((tag, color, self.focusFill))
+        #for k in range(num):
+            #for tag, bg, col in rects:
+                #self.itemconfigure(tag, fill = col)
+            #self.update_idletasks()
+            #time.sleep(.1)
+            #for tag, bg, col in rects:
+                #self.itemconfigure(tag, fill = bg)
+            #self.update_idletasks()
+            #time.sleep(.1)
 
-    def candidateString(self, cands):
-        # String representation of a list of candidates
+    #def candidateString(self, cands):
+        ## String representation of a list of candidates
 
-        if not cands:
-            return ''
-        string = ''.join([str(x) if x in cands else ' ' for x in range(1,1+self.dim)])
-        return string[:3] + '\n' + string[3:6] + '\n' + string[6:]
+        #if not cands:
+            #return ''
+        #string = ''.join([str(x) if x in cands else ' ' for x in range(1,1+self.dim)])
+        #return string[:3] + '\n' + string[3:6] + '\n' + string[6:]
 
-    def enterCell(self, cell):
-        # Cell is (col, row) pair
-        # Give focus to cell
-        # Sets self.focus and self.focusFill
+    #def enterCell(self, cell):
+        ## Cell is (col, row) pair
+        ## Give focus to cell
+        ## Sets self.focus and self.focusFill
 
-        try:                                # release old focus, if any
-            tag = 'rect%d%d' % self.focus
-            self.itemconfigure(tag, fill = self.focusFill)
-        except TypeError:
-            pass
-        tag = 'rect%d%d' % cell
-        self.focus = cell
-        self.focusFill = self.itemcget(tag, 'fill')
-        self.itemconfigure(tag, fill = 'white')
+        #try:                                # release old focus, if any
+            #tag = 'rect%d%d' % self.focus
+            #self.itemconfigure(tag, fill = self.focusFill)
+        #except TypeError:
+            #pass
+        #tag = 'rect%d%d' % cell
+        #self.focus = cell
+        #self.focusFill = self.itemcget(tag, 'fill')
+        #self.itemconfigure(tag, fill = 'white')
 
-    def postUpdates(self, updates):
-        # Each update is an object of class Update
+    #def postUpdates(self, updates):
+        ## Each update is an object of class Update
 
-        for update in updates:
-            coords = update.coords
-            cands  = update.candidates
-            answer = update.answer
-            atag = 'a%d%d' % coords
-            ctag = 'c%d%d' % coords
+        #for update in updates:
+            #coords = update.coords
+            #cands  = update.candidates
+            #answer = update.answer
+            #atag = 'a%d%d' % coords
+            #ctag = 'c%d%d' % coords
 
-            if answer:
-                self.itemconfigure(ctag, text = '' )
-                self.itemconfigure(atag, text = str(answer))
-            else:
-                self.itemconfigure(ctag, text = self.candidateString(cands))
-                self.itemconfigure(atag, text = '' )
+            #if answer:
+                #self.itemconfigure(ctag, text = '' )
+                #self.itemconfigure(atag, text = str(answer))
+            #else:
+                #self.itemconfigure(ctag, text = self.candidateString(cands))
+                #self.itemconfigure(atag, text = '' )
 
-    def shiftFocus(self, x, y):
-        # User clicked the point (x, y)
+    #def shiftFocus(self, x, y):
+        ## User clicked the point (x, y)
 
-        j = (x - self.x0) // self.cellWidth
-        if not 0 <= j < self.dim:
-            return
-        k = (y - self.y0) // self.cellHeight
-        if not 0 <= k < self.dim:
-            return
-        self.enterCell( (j, k) )
+        #j = (x - self.x0) // self.cellWidth
+        #if not 0 <= j < self.dim:
+            #return
+        #k = (y - self.y0) // self.cellHeight
+        #if not 0 <= k < self.dim:
+            #return
+        #self.enterCell( (j, k) )
 
-    def celebrate(self):
-        # Indicate a win by flashing board green
-        # Drop the focus
-        # Deactivate the board
+    #def celebrate(self):
+        ## Indicate a win by flashing board green
+        ## Drop the focus
+        ## Deactivate the board
 
-        all = [(x,y) for x in range(self.dim) for y in range(self.dim)]
-        self.highlight(all, 'green', 4)
-        tag = 'rect%d%d' % self.focus
-        self.itemconfigure(tag, fill = self.focusFill)
-        self.deactivate()
-        del(self.focus)
-        del(self.focusFill)
+        #all = [(x,y) for x in range(self.dim) for y in range(self.dim)]
+        #self.highlight(all, 'green', 4)
+        #tag = 'rect%d%d' % self.focus
+        #self.itemconfigure(tag, fill = self.focusFill)
+        #self.deactivate()
+        #del(self.focus)
+        #del(self.focusFill)
 
-    def restart(self, updates):
-        # Clear all solution data from the board, and then post the updates
-        # User wants to start current puzzle over
+    #def restart(self, updates):
+        ## Clear all solution data from the board, and then post the updates
+        ## User wants to start current puzzle over
 
-        self.itemconfigure('atext', text = '')
-        cstr = self.candidateString([])
-        self.itemconfigure('ctext', text = cstr)
-        self.postUpdates(updates)
-        self.enterCell((0,0))
-        self.activate()
+        #self.itemconfigure('atext', text = '')
+        #cstr = self.candidateString([])
+        #self.itemconfigure('ctext', text = cstr)
+        #self.postUpdates(updates)
+        #self.enterCell((0,0))
+        #self.activate()
 
-    def deactivate(self):
-        # Replace the 'Board' bindtag by 'Canvas'.
-        # See defininition of Control in control.py
-        # Board will no longer respond to keypresses and mouseclicks
+    #def deactivate(self):
+        ## Replace the 'Board' bindtag by 'Canvas'.
+        ## See defininition of Control in control.py
+        ## Board will no longer respond to keypresses and mouseclicks
 
-        tags = self.bindtags()
-        tags = (tags[0], 'Canvas') + tags[2:]
-        self.bindtags(tags)
+        #tags = self.bindtags()
+        #tags = (tags[0], 'Canvas') + tags[2:]
+        #self.bindtags(tags)
 
-    def activate(self):
-        # Activate event bindings
-        # Reverse of deactivate, above
+    #def activate(self):
+        ## Activate event bindings
+        ## Reverse of deactivate, above
 
-        tags = self.bindtags()
-        tags = (tags[0], 'Board') + tags[2:]
-        self.bindtags(tags)
+        #tags = self.bindtags()
+        #tags = (tags[0], 'Board') + tags[2:]
+        #self.bindtags(tags)
 
