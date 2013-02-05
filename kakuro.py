@@ -12,10 +12,15 @@ from Tkinter import *
 from tkMessageBox import *                    # get standard dialogs
 from tkFileDialog import *
 import tkFont
+import thread
 import time, os.path, re
 from board import Board
 from utilities import displayDialog
 from control import SolverControl
+import kakuroCSP
+
+blackFill = 'dark gray'
+noticeFont = ('helevetica', 18, 'normal')
 
 class Kakuro(Frame):
 
@@ -179,6 +184,87 @@ class Kakuro(Frame):
       if askyesno('Puzzle Not Saved', "Save Current Puzzle?"):
         self.savePuzzle()
     self.master.destroy()
+
+  def solve(self):
+    board = self.board
+    rows = board.rows
+    cols = board.cols
+    across = dict()
+    down = dict()
+
+    # unhighlight any highlighted cell
+    board.itemconfigure('highlight', fill=blackFill)
+    board.dtag('highlight', 'highlight')
+
+    # add a sentinel black square to the end of each row and column
+    for r in range(rows+1):
+      across[r, cols] = 0
+    for c in range(cols+1):
+      down[rows, c] = 0
+
+    for sq in board.find_withtag('black'):
+      tags = board.gettags(sq)
+      rTag = [t for t in tags if t.startswith('R')][0]
+      cTag = [t for t in tags if t.startswith('C')][0]
+      r = int(rTag[1:])
+      c = int(cTag[1:])
+      clueTag = 'clue'+rTag+cTag
+      try:
+        id = board.find_withtag(clueTag+'A')[0]
+        across[r,c] = int(board.itemcget(id, 'text'))
+      except (IndexError, ValueError):
+        across[r, c] = 0
+      try:
+        id = board.find_withtag(clueTag+'D')[0]
+        down[r, c] = int(board.itemcget(id, 'text'))
+      except (IndexError, ValueError):
+        down[r, c] = 0
+
+    aSum = sum(across.values())
+    dSum = sum(down.values())
+
+    if  aSum == 0:
+      showerror('No Puzzle', 'Please enter some clues')
+      return []
+
+    if aSum != dSum:
+      showerror('Inconsistent Data',
+         'Across clues total %d\nDown clues total %d' % (aSum, dSum))
+      return []
+
+    bad = kakuroCSP.sanityCheck(rows, cols, across, down)
+    if bad:
+      errs = ["row %2s col %2s: Can't make %2d in %s\n" % b for b in bad]
+      self.errorDialog('\n'.join(errs))
+      return []
+
+    left, top, right, bottom = board.bbox('all')
+    board.create_text(left+20, top+20, anchor = NW, text = "Solving 00:00",
+                                fill = 'yellow', font = noticeFont,
+                                tag = 'notice')
+    start = time.time()
+    kakuroCSP.solverDone = False
+    solver = thread.start_new_thread(kakuroCSP.kakuroCSP, ())
+    while not kakuroCSP.solverDone:
+      elapsed = int(time.time() - start)
+      if elapsed >= 3600:
+        hours = elapsed // 3600
+        elapsed -= 3600*hours
+        minutes = elapsed // 60
+        seconds = elapsed % 60
+        timeText = 'Solving %d:%02d:%02d' % (hours, minutes, seconds)
+      else:
+        minutes = elapsed // 60
+        seconds = elapsed % 60
+        timeText = 'Solving %02d:%02d' % (minutes, seconds)
+      board.itemconfigure('notice', text = timeText)
+      board.update_idletasks()
+
+    self.solns = kakuroCSP.solutions
+    self.vars  = kakuroCSP.variables
+
+    self.report()
+    board.delete('notice')
 
 def main():
   root = Tk()
