@@ -56,9 +56,6 @@ class SolverControl(Frame):
     except IndexError:
       return
 
-  def getReady(self):
-      self.across.focus_set()
-
 class PlayerControl(Frame):
   def __init__(self, parent, win):
     Frame.__init__(self, win)
