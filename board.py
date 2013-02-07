@@ -200,6 +200,33 @@ class Board(ScrolledCanvas):
         canvas.itemconfigure(dTag, text = down)
     canvas.itemconfigure('black', fill = blackFill)
 
+  def unhighlight(self):
+    self.itemconfigure('highlight', fill=blackFill)
+    self.dtag('highlight', 'highlight')
+
+  def getClues(self):
+    clues = dict()
+    for sq in self.find_withtag('black'):
+      tags = self.gettags(sq)
+      rTag = [t for t in tags if t.startswith('R')][0]
+      cTag = [t for t in tags if t.startswith('C')][0]
+      r = int(rTag[1:])
+      c = int(cTag[1:])
+      clueTag = 'clue'+rTag+cTag
+      try:
+        id = self.find_withtag(clueTag+'A')[0]
+        a = int(self.itemcget(id, 'text'))
+      except (IndexError, ValueError):
+        a = 0
+      try:
+        id = self.find_withtag(clueTag+'D')[0]
+        d = int(self.itemcget(id, 'text'))
+      except (IndexError, ValueError):
+        d = 0
+      clues[r, c] = (a, d)
+
+    return clues
+
 #class Board(Canvas):
     ## View
 

@@ -10,10 +10,15 @@ from collections import namedtuple, defaultdict
 from itertools import combinations
 
 Equation = namedtuple('Equations', 'variables clue')
+solverDone = False          # signal completion to main thread
 
 def kakuroCSP():
+
   # Pre: variables and equations have been computed by sanityCheck
-  # Return (solutions, variables)
+  # Will be run in a background thread
+
+  global solutions, variables       # will be accessed by main thread
+  global solverDone
 
   problem = Problem()
 
@@ -45,8 +50,7 @@ def kakuroCSP():
     problem.addConstraint(ExactSumConstraint(eq.clue), eq.variables)
 
   solutions = problem.getSolutions()
-  return (solutions, variables)
-
+  solverDone = True
 
 def sanityCheck(rows, cols, across, down):
   # Returns a list of impossible clues, if any
@@ -94,10 +98,3 @@ def limits(n):
   # maximim and minimum sums in n numbers
 
   return (n*(n+1)//2, n*(19-n)//2)
-
-
-
-
-
-
-

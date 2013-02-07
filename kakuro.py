@@ -4,7 +4,7 @@
 # The main window contains a canvas that will be configured either for
 # entering and programmatically solving puzzles (Solver mode), or for
 # solving them manually (Player mode).  There will be a two different
-# control boxes, one for each mode, butonly one will be displayed at a
+# control boxes, one for each mode, but only one will be displayed at a
 # time.  In Player mode, there will also be a timer.
 
 
@@ -52,7 +52,7 @@ class Kakuro(Frame):
     file = top.file = Menu(top, tearoff = 0)
     file.add_command(label='New', command=self.dimensionDialog, underline=0)
     file.add_command(label='Open', command = self.openFile, underline = 0)
-    file.add_command(label='Save', command=self.savePuzzle, underline=0)
+    file.add_command(label='Save', command=self.savePuzzleKro, underline=0)
     file.add_command(label='Clear',command = self.clearSolution, underline=0)
     file.add_command(label='Print', command=self.board.printBoard, underline=0)
     file.add_command(label='Exit', command=self.wrapup, underline=1)
@@ -118,14 +118,14 @@ class Kakuro(Frame):
     clues = cluePattern.findall(text)
     self.board.displayClues(clues)
 
-  def savePuzzle(self):
+  def savePuzzleKro(self):
+    # Save puzzle in .kro format
     # Menu item is enabled if and only if the puzzle has been solved
     # and has exactly one solution.
     # If there are more rows than columns, the puzzle is transposed to
     # better fit a computer screen.
 
     board = self.board
-    canvas = board.canvas
     rows = board.rows
     cols = board.cols
     fname = asksaveasfilename( filetypes = [('Kakuro Files', '.kro')],
@@ -145,25 +145,9 @@ class Kakuro(Frame):
     fout.write('\nBlack Squares\n')
     fout.write('Row Col Acr Dwn\n\n')
 
-    blacks = canvas.find_withtag('black')
-    blackDict = dict()
-    for black in blacks:
-      tags = canvas.gettags(black)
-      rTag = [t for t in tags if t.startswith('R')][0]
-      cTag = [t for t in tags if t.startswith('C')][0]
-      clueTag = 'clue' + rTag + cTag
-      across = canvas.itemcget(clueTag + 'A', 'text')
-      down = canvas.itemcget(clueTag + 'D', 'text')
-      if not across: across = 0
-      if not down: down = 0
-      r = int(rTag[1:])
-      c = int(cTag[1:])
-      if rows <= cols:
-        blackDict[r, c] = (across, down)
-      else:
-        blackDict[c, r] = (down, across)
-    for b in sorted(blackDict):
-      clues = blackDict[b]
+    blacks = board.getClues()
+    for b in sorted(blacks):
+      clues = blacks[b]
       fout.write('%3s %3s %3s %3s\n' % (b[0], b[1], clues[0], clues[1]))
     fout.write('\nSolution\n')
     fout.write('Row Col Ans\n\n')
@@ -182,43 +166,26 @@ class Kakuro(Frame):
   def wrapup(self):
     if self.menu.file.entrycget('Save', 'state') == NORMAL:
       if askyesno('Puzzle Not Saved', "Save Current Puzzle?"):
-        self.savePuzzle()
+        self.savePuzzleKro()
     self.master.destroy()
 
   def solve(self):
     board = self.board
     rows = board.rows
     cols = board.cols
-    across = dict()
-    down = dict()
 
     # unhighlight any highlighted cell
-    board.itemconfigure('highlight', fill=blackFill)
-    board.dtag('highlight', 'highlight')
+    board.unhighlight()
+
+    clues = board.getClues()
+    across = {k:clues[k][0] for k in clues}
+    down  = {k:clues[k][1] for k in clues}
 
     # add a sentinel black square to the end of each row and column
     for r in range(rows+1):
       across[r, cols] = 0
     for c in range(cols+1):
       down[rows, c] = 0
-
-    for sq in board.find_withtag('black'):
-      tags = board.gettags(sq)
-      rTag = [t for t in tags if t.startswith('R')][0]
-      cTag = [t for t in tags if t.startswith('C')][0]
-      r = int(rTag[1:])
-      c = int(cTag[1:])
-      clueTag = 'clue'+rTag+cTag
-      try:
-        id = board.find_withtag(clueTag+'A')[0]
-        across[r,c] = int(board.itemcget(id, 'text'))
-      except (IndexError, ValueError):
-        across[r, c] = 0
-      try:
-        id = board.find_withtag(clueTag+'D')[0]
-        down[r, c] = int(board.itemcget(id, 'text'))
-      except (IndexError, ValueError):
-        down[r, c] = 0
 
     aSum = sum(across.values())
     dSum = sum(down.values())
@@ -247,15 +214,12 @@ class Kakuro(Frame):
     solver = thread.start_new_thread(kakuroCSP.kakuroCSP, ())
     while not kakuroCSP.solverDone:
       elapsed = int(time.time() - start)
-      if elapsed >= 3600:
-        hours = elapsed // 3600
-        elapsed -= 3600*hours
-        minutes = elapsed // 60
-        seconds = elapsed % 60
+      seconds = elapsed % 60
+      minutes = (elapsed % 3600) // 60
+      hours = elapsed // 3600
+      if hours:
         timeText = 'Solving %d:%02d:%02d' % (hours, minutes, seconds)
       else:
-        minutes = elapsed // 60
-        seconds = elapsed % 60
         timeText = 'Solving %02d:%02d' % (minutes, seconds)
       board.itemconfigure('notice', text = timeText)
       board.update_idletasks()
@@ -265,6 +229,32 @@ class Kakuro(Frame):
 
     self.report()
     board.delete('notice')
+
+  def errorDialog(self, errs):
+    win = Toplevel()
+    win.withdraw()
+
+    label = Label(win, text = errs)
+    label.grid(row= 0, column = 0)
+    button = Button(win, text = 'Okay', command = win.destroy)
+
+    displayDialog(win, self.master, 'Invalid Clues')
+
+  def report(self):
+    solns = self.solns
+    if not solns:
+      showerror('Bad Problem', 'No Solution')
+    elif len(solns) == 1:
+      self.menu.file.entryconfigure('Save', state = NORMAL)
+      if askyesno('One Solution', 'Display the solution?', default='no'):
+        self.board.showSolution(0)
+    else:
+      for idx, soln in enumerate(solns):
+        if askyesno('%d Solutions' % len(solns),
+                    'Display solution number %d?' %(idx+1)):
+          self.board.showSolution(idx)
+        else:
+          break
 
 def main():
   root = Tk()
