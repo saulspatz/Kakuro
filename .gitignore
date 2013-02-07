@@ -164,6 +164,8 @@ pip-log.txt
 
 ######################################
 # Project specific
+# .wpr is Wing IDE project file
 # ####################################
 .pdf
 .ps
+.wpr
