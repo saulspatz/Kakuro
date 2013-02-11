@@ -213,22 +213,28 @@ class Kakuro(Frame):
     kakuroCSP.solverDone = False
     solver = thread.start_new_thread(kakuroCSP.kakuroCSP, ())
     while not kakuroCSP.solverDone:
-      elapsed = int(time.time() - start)
-      seconds = elapsed % 60
-      minutes = (elapsed % 3600) // 60
-      hours = elapsed // 3600
-      if hours:
-        timeText = 'Solving %d:%02d:%02d' % (hours, minutes, seconds)
-      else:
-        timeText = 'Solving %02d:%02d' % (minutes, seconds)
-      board.itemconfigure('notice', text = timeText)
-      board.update_idletasks()
+      self.showSolveTime(start, 'notice')
+      board.after(100)
 
     self.solns = kakuroCSP.solutions
     self.vars  = kakuroCSP.variables
 
     self.report()
     board.delete('notice')
+
+  def showSolveTime(self, start, textObject):
+    board = self.board
+    elapsed = int(time.time() - start)
+    seconds = elapsed % 60
+    minutes = (elapsed % 3600) // 60
+    hours = elapsed // 3600
+    if hours:
+      timeText = 'Solving %d:%02d:%02d' % (hours, minutes, seconds)
+    else:
+      timeText = 'Solving %02d:%02d' % (minutes, seconds)
+    board.itemconfigure(textObject, text = timeText)
+    board.update()
+
 
   def errorDialog(self, errs):
     win = Toplevel()
