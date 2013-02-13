@@ -205,6 +205,30 @@ class Board(ScrolledCanvas):
         canvas.itemconfigure(dTag, text = down)
     canvas.itemconfigure('black', fill = blackFill)
 
+  def displayPlayerClues(self, clues):
+    canvas = self.canvas
+    for clue in clues:
+      row, col, across, down = clue.split()
+      coords = '%s.%s' % (row, col)
+      cell = canvas.find_withtag(coords)
+      canvas.addtag_withtag('black', coords)
+      if across != '0':
+        left, top, right, bottom = canvas.bbox(cell)
+        p = canvas.create_polygon(left, top, right, top, right, bottom,
+                fill = '', activefill = currentFill, tag = coords)
+
+        canvas.create_text(right-2, top+2, anchor = NE, text = across,
+                           fill = 'black', font = clueFont)
+      if down != '0':
+        left, top, right, bottom = canvas.bbox(cell)
+        p = canvas.create_polygon(left, top, left, bottom, right, bottom,
+                fill = '', activefill = currentFill, tag = coords)
+        canvas.create_text(left+2, bottom-2, anchor = SW, text = down,
+                           fill = 'black', font = clueFont)
+      if across != '0' or down != '0':
+        canvas.create_line(left, top, right, bottom)
+    canvas.itemconfigure('black', fill = blackFill)
+
   def unhighlight(self):
     self.itemconfigure('highlight', fill=blackFill)
     self.dtag('highlight', 'highlight')

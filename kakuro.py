@@ -29,7 +29,7 @@ class Kakuro(Frame):
     self.timer = StopWatch(self)
     self.board = Board(self, bg = bg, cursor=cursor)
     self.control = SolverControl(self)
-    self.setTitle()
+    self.setTitle('Solver')
     self.timer.pack()
     self.control.pack(side = BOTTOM, expand=YES, fill = X)
     self.board.pack(side = TOP, expand = YES, fill = BOTH)
@@ -38,10 +38,10 @@ class Kakuro(Frame):
     self.fileSaveDir = '.'        # directory for saving puzzles
     self.fileOpenDir = '.'        # directory for saved puzzles
 
-  def setTitle(self):
+  def setTitle(self, mode):
     b = self.board
     top = self.winfo_toplevel()
-    top.title('Kakuro Solver %d-by-%d' %(b.rows-1, b.cols-1))
+    top.title('Kakuro %s %d-by-%d' %(mode, b.rows-1, b.cols-1))
 
   def makeMenu(self):
     def notdone():
@@ -101,13 +101,13 @@ class Kakuro(Frame):
     self.winDim.destroy()
     rows = int(self.rowVar.get())
     cols = int(self.colVar.get())
-    self.drawNew(rows, cols)
+    self.drawNew(rows, cols, 'Solver')
     self.timer.pause(reset=True)
 
-  def drawNew(self, rows, cols):
+  def drawNew(self, rows, cols, mode):
     self.menu.file.entryconfigure('Save', state = DISABLED)
     self.board.drawNew(rows, cols)
-    self.setTitle()
+    self.setTitle(mode)
 
   def openFile(self):
     # Mainly for development, to avoid having to enter puzzles
@@ -124,7 +124,7 @@ class Kakuro(Frame):
 
     dimPattern = re.compile(r'(\d+) by (\d+)')
     rows, cols = dimPattern.search(text).groups()
-    self.drawNew(int(rows), int(cols))
+    self.drawNew(int(rows), int(cols), 'Solver')
     cluePattern = re.compile(r'\d+ +\d+ +\d+ +\d+.*\n')
     clues = cluePattern.findall(text)
     self.board.displaySolverClues(clues)
@@ -171,7 +171,22 @@ class Kakuro(Frame):
     self.menu.file.entryconfigure('Save', state = DISABLED)
 
   def loadPuzzle(self):
-    pass
+    fname = askopenfile( filetypes = [('Kakuro Files', '.kro')],
+                         title = 'Open Puzzle File',
+                         defaultextension = 'kro',
+                        initialdir = self.fileOpenDir)
+    if not fname:
+        return
+    self.fileOpenDir = os.path.dirname(fname.name)
+    text = fname.read()
+
+    dimPattern = re.compile(r'(\d+) by (\d+)')
+    rows, cols = dimPattern.search(text).groups()
+    self.drawNew(int(rows), int(cols), 'Player')
+    cluePattern = re.compile(r'\d+ +\d+ +\d+ +\d+.*\n')
+    clues = cluePattern.findall(text)
+    self.board.displayPlayerClues(clues)
+    self.timer.pause(reset = True)
 
   def savePuzzleKak(self):
     pass
