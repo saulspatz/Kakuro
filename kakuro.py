@@ -57,9 +57,16 @@ class Kakuro(Frame):
     file.add_command(label='Print', command=self.board.printBoard, underline=0)
     file.add_command(label='Exit', command=self.wrapup, underline=1)
     file.entryconfigure('Save', state = DISABLED)
-    file.entryconfigure('Clear', state = DISABLED)
+
+    puzzle = top.puzzle = Menu(top, tearoff = 0)
+    puzzle.add_command(label='Open',command = self.loadPuzzle,underline = 0)
+    puzzle.add_command(label='Save',command=self.savePuzzleKak,underline=0)
+    puzzle.add_command(label='Clear',command = notdone, underline=0)
+    puzzle.entryconfigure('Save', state = DISABLED)
+    puzzle.entryconfigure('Clear', state = DISABLED)
 
     top.add_cascade(label='File', menu=file, underline=0)
+    top.add_cascade(label='Puzzle', menu=puzzle, underline=0)
     return top
 
   def dimensionDialog(self):
@@ -158,6 +165,12 @@ class Kakuro(Frame):
       fout.write('%3s %3s %3s\n' % (white[0], white[1], soln[white]))
     fout.close()
     self.menu.file.entryconfigure('Save', state = DISABLED)
+
+  def loadPuzzle(self):
+    pass
+
+  def savePuzzleKak(self):
+    pass
 
   def clearSolution(self):
     self.board.clearSolution()
