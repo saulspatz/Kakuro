@@ -1,4 +1,5 @@
 from Tkinter import *
+from utilities import displayDialog
 from puzzle import AnswerError, CandidateError
 from puzzle import Update
 
@@ -8,9 +9,9 @@ class SolverControl(Frame):
     self.board = master.board
     self.master = master
 
-    helpButton = Button(self, text = 'Help', command = self.help)
+    self.helpButton = Button(self, text = 'Help', command = self.help)
 
-    solveButton = Button(self, text = 'Solve',
+    self.solveButton = Button(self, text = 'Solve',
                               command = master.solve)
 
     self.across = IntVar()
@@ -22,18 +23,19 @@ class SolverControl(Frame):
                             label = 'Down', variable = self.down,
                             command = self.enterDown, state = DISABLED)
 
-    helpButton.pack(side = LEFT, expand = YES)
+    self.helpButton.pack(side = LEFT, expand = YES)
     self.acrossScale.pack(side = LEFT, expand = YES)
     self.downScale.pack(side = LEFT, expand = YES)
-    solveButton.pack(side = LEFT, expand = YES)
+    self.solveButton.pack(side = LEFT, expand = YES)
 
   def help(self):
     win = Toplevel()
     win.withdraw()
+    helpFont = ('helevetica', 12, 'normal')
     helpText = "Click on a cell to make a black square.\n"
     helpText += "Select a black square to enter clues.\n"
     helpText += "To delete a black square, right-click it.\n"
-    Label(win, text = helpText, font = clueFont, justify = LEFT).pack()
+    Label(win, text = helpText, font = helpFont, justify = LEFT).pack()
     Button(win, text = 'Okay', command = win.destroy).pack()
     displayDialog(win, self.master.master, "Kakuro Help")
 
@@ -55,6 +57,16 @@ class SolverControl(Frame):
       board.itemconfigure(clueTag, text = text)
     except IndexError:
       return
+
+  def enable(self):
+    for control in (self.acrossScale, self.downScale, self.helpButton,
+                    self.solveButton):
+      control.configure(state = 'normal')
+
+  def disable(self):
+    for control in (self.acrossScale, self.downScale, self.helpButton,
+                    self.solveButton):
+      control.configure(state = 'disabled')
 
 class PlayerControl(Frame):
   def __init__(self, parent, win):

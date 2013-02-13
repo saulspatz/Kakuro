@@ -195,6 +195,8 @@ class Kakuro(Frame):
     # unhighlight any highlighted cell
     board.unhighlight()
 
+    board.disableSolver()
+
     clues = board.getClues()
     across = {k:clues[k][0] for k in clues}
     down  = {k:clues[k][1] for k in clues}

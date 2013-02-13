@@ -72,10 +72,15 @@ class Board(ScrolledCanvas):
   def enableSolver(self):
     self.tag_bind('cell', '<ButtonPress-1>', self.solverLeftClick)
     self.tag_bind('cell', '<ButtonPress-3>', self.solverRightClick)
+    try:
+      self.master.control.enable()
+    except AttributeError:          # occurs at app startup
+      pass
 
   def disableSolver(self):
     self.tag_bind('cell', '<ButtonPress-1>', lambda event:None)
     self.tag_bind('cell', '<ButtonPress-3>', lambda event:None)
+    self.master.control.disable()
 
   def solverLeftClick(self, event):
 
