@@ -5,8 +5,7 @@
 # entering and programmatically solving puzzles (Solver mode), or for
 # solving them manually (Player mode).  There will be a two different
 # control boxes, one for each mode, but only one will be displayed at a
-# time.  In Player mode, there will also be a timer.
-
+# time.  There will also be a clock.
 
 from Tkinter import *
 from tkMessageBox import *                    # get standard dialogs
@@ -15,7 +14,7 @@ import tkFont
 import thread
 import time, os.path, re
 from board import Board
-from utilities import displayDialog
+from utilities import displayDialog, StopWatch
 from control import SolverControl
 import kakuroCSP
 
@@ -27,11 +26,14 @@ class Kakuro(Frame):
   def __init__(self, master, bg = 'white', cursor = 'crosshair'):
     Frame.__init__(self, master)
     self.pack(expand = YES, fill = BOTH)
+    self.timer = StopWatch(self)
     self.board = Board(self, bg = bg, cursor=cursor)
     self.control = SolverControl(self)
     self.setTitle()
-    self.control.pack(side=BOTTOM, expand=YES, fill = X)
-    self.board.pack(side=TOP, expand = YES, fill = BOTH)
+    self.timer.pack()
+    self.control.pack(side = BOTTOM, expand=YES, fill = X)
+    self.board.pack(side = TOP, expand = YES, fill = BOTH)
+
     self.menu = self.makeMenu()
     self.fileSaveDir = '.'        # directory for saving puzzles
     self.fileOpenDir = '.'        # directory for saved puzzles
@@ -100,6 +102,7 @@ class Kakuro(Frame):
     rows = int(self.rowVar.get())
     cols = int(self.colVar.get())
     self.drawNew(rows, cols)
+    self.timer.pause(reset=True)
 
   def drawNew(self, rows, cols):
     self.menu.file.entryconfigure('Save', state = DISABLED)
@@ -115,6 +118,7 @@ class Kakuro(Frame):
                         initialdir = self.fileOpenDir)
     if not fname:
         return
+    self.timer.pause(reset = True)
     self.fileOpenDir = os.path.dirname(fname.name)
     text = fname.read()
 
@@ -184,6 +188,7 @@ class Kakuro(Frame):
 
   def solve(self):
     board = self.board
+    timer = self.timer
     rows = board.rows
     cols = board.cols
 
@@ -218,36 +223,20 @@ class Kakuro(Frame):
       self.errorDialog('\n'.join(errs))
       return []
 
-    left, top, right, bottom = board.bbox('all')
-    board.create_text(left+20, top+20, anchor = NW, text = "Solving 00:00",
-                                fill = 'yellow', font = noticeFont,
-                                tag = 'notice')
-    start = time.time()
     kakuroCSP.solverDone = False
+    self.timer.start()
     solver = thread.start_new_thread(kakuroCSP.kakuroCSP, ())
+
     while not kakuroCSP.solverDone:
-      self.showSolveTime(start, 'notice')
+      timer.update()
       board.after(100)
 
+    self.timer.stop()
     self.solns = kakuroCSP.solutions
     self.vars  = kakuroCSP.variables
 
     self.report()
     board.delete('notice')
-
-  def showSolveTime(self, start, textObject):
-    board = self.board
-    elapsed = int(time.time() - start)
-    seconds = elapsed % 60
-    minutes = (elapsed % 3600) // 60
-    hours = elapsed // 3600
-    if hours:
-      timeText = 'Solving %d:%02d:%02d' % (hours, minutes, seconds)
-    else:
-      timeText = 'Solving %02d:%02d' % (minutes, seconds)
-    board.itemconfigure(textObject, text = timeText)
-    board.update()
-
 
   def errorDialog(self, errs):
     win = Toplevel()

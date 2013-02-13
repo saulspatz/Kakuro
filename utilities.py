@@ -77,16 +77,26 @@ class StopWatch(Frame):
     Frame.__init__(self, win)
     self.label = Label(self)
     timeFont = ('helevetica', 12, 'bold')
-    self.label.config(bd=4, relief=SUNKEN, bg='black',
-                      fg = 'yellow', text='00:00', font = timeFont)
+    self.label.config(bd=4, relief=SUNKEN, bg='black', font = timeFont)
     self.state = 'waiting'
     self.afterID = 0
+    self.pause(reset = True)
     self.label.pack()
+
+  def showTime(self, elapsed):
+    seconds = elapsed % 60
+    minutes = (elapsed % 3600) // 60
+    hours = elapsed // 3600
+    if hours:
+      timeText = '%d:%02d:%02d' % (hours, minutes, seconds)
+    else:
+      timeText = '%02d:%02d' % (minutes, seconds)
+    self.label.config(text = timeText)
 
   def start(self):
     self.startTime = time.time()
     self.state = 'running'
-    self.label.config(fg = 'green')
+    self.label.configure(fg = 'green')
     self.onTimer()
 
   def stop(self):
@@ -96,26 +106,21 @@ class StopWatch(Frame):
     self.state = 'stopped'
 
   def onTimer(self):
-    elapsed = int(time.time() - self.startTime)
-    if elapsed >= 3600:
-      hours = elapsed // 3600
-      elapsed -= 3600*hours
-      minutes = elapsed // 60
-      seconds = elapsed % 60
-      timeText = '%d:%02d:%02d' % (hours, minutes, seconds)
-    else:
-      minutes = elapsed // 60
-      seconds = elapsed % 60
-      timeText = '%02d:%02d' % (minutes, seconds)
-    self.label.config(text = timeText)
+    self.elapsedTime = int(time.time() - self.startTime)
+    self.showTime(self.elapsedTime)
     if self.state == 'running':
       self.afterID = self.after(100, self.onTimer)
 
-  def pause(self):
-    self.after_cancel(self.afterID)
+  def pause(self, reset = False):
+    if self.state == 'running':
+      self.after_cancel(self.afterID)
     self.label.configure(fg = 'yellow')
-    self.elapsedTime = time.time() - self.startTime
+    if reset:
+      self.elapsedTime = 0
+    else:
+      self.elapsedTime = time.time() - self.startTime
     self.state = 'paused'
+    self.showTime(self.elapsedTime)
 
   def resume(self):
     self.startTime = time.time() - self.elapsedTime
@@ -125,6 +130,3 @@ class StopWatch(Frame):
 
   def time(self):
     return time.time() - self.startTime
-
-  def setTime(self, seconds):
-    self.elapsedTime = seconds
