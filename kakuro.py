@@ -127,7 +127,7 @@ class Kakuro(Frame):
     self.drawNew(int(rows), int(cols))
     cluePattern = re.compile(r'\d+ +\d+ +\d+ +\d+.*\n')
     clues = cluePattern.findall(text)
-    self.board.displayClues(clues)
+    self.board.displaySolverClues(clues)
 
   def savePuzzleKro(self):
     # Save puzzle in .kro format

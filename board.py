@@ -190,7 +190,7 @@ class Board(ScrolledCanvas):
     self.delete('all')
     self.reset(width, rows, cols)
 
-  def displayClues(self, clues):
+  def displaySolverClues(self, clues):
     canvas = self.canvas
     for clue in clues:
       row, col, across, down = clue.split()
