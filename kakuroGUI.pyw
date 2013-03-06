@@ -219,11 +219,3 @@ class KakuroGUI(object):
     if save:
       self.saveFile()
     return save
-
-def main():
-  root = Tk()
-  KakuroGUI(root)
-  root.mainloop()
-
-if __name__ == "__main__":
-    main()

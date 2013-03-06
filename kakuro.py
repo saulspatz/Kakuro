@@ -13,35 +13,31 @@ from tkFileDialog import *
 import tkFont
 import thread
 import time, os.path, re
-from board import Board
+from solver import Solver
+from player import Player
 from utilities import displayDialog, StopWatch
-from control import SolverControl
 import kakuroCSP
-
-blackFill = 'dark gray'
-noticeFont = ('helevetica', 18, 'normal')
 
 class Kakuro(Frame):
 
-  def __init__(self, master, bg = 'white', cursor = 'crosshair'):
+  def __init__(self, master):
     Frame.__init__(self, master)
     self.pack(expand = YES, fill = BOTH)
     self.timer = StopWatch(self)
-    self.board = Board(self, bg = bg, cursor=cursor)
-    self.control = SolverControl(self)
-    self.setTitle('Solver')
-    self.timer.pack()
-    self.control.pack(side = BOTTOM, expand=YES, fill = X)
-    self.board.pack(side = TOP, expand = YES, fill = BOTH)
-
-    self.menu = self.makeMenu()
+    self.solver = Solver(self, self.timer)
+    self.player = Player(self)
+    self.timer.grid(row = 0, column = 0, sticky = 'ew')
+    self.player.grid(row = 1, column = 0, sticky = 'news')
+    self.player.grid_remove()
+    self.solver.grid(row = 1, column = 0, sticky = 'news')
+    self.rowconfigure(0, weight = 0)
+    self.rowconfigure(1, weight = 1)
+    self.columnconfigure(0, weight = 1)
     self.fileSaveDir = '.'        # directory for saving puzzles
     self.fileOpenDir = '.'        # directory for saved puzzles
-
-  def setTitle(self, mode):
-    b = self.board
-    top = self.winfo_toplevel()
-    top.title('Kakuro %s %d-by-%d' %(mode, b.rows-1, b.cols-1))
+    self.menu = self.makeMenu()
+    self.solver.menu = self.menu
+    self.enableSolver()
 
   def makeMenu(self):
     def notdone():
@@ -56,7 +52,7 @@ class Kakuro(Frame):
     file.add_command(label='Open', command = self.openFile, underline = 0)
     file.add_command(label='Save', command=self.savePuzzleKro, underline=0)
     file.add_command(label='Clear',command = self.clearSolution, underline=0)
-    file.add_command(label='Print', command=self.board.printBoard, underline=0)
+    file.add_command(label='Print', command=self.solver.printBoard, underline=0)
     file.add_command(label='Exit', command=self.wrapup, underline=1)
     file.entryconfigure('Save', state = DISABLED)
 
@@ -83,8 +79,8 @@ class Kakuro(Frame):
                      from_ = 4, to = 40)
     colEntry = Scale(colFrame, variable = self.colVar, orient = VERTICAL,
                      from_ = 4, to = 40)
-    rowEntry.set(self.board.rows-1)
-    colEntry.set(self.board.cols-1)
+    rowEntry.set(self.solver.rows-1)
+    colEntry.set(self.solver.cols-1)
     rowEntry.pack()
     colEntry.pack()
 
@@ -106,8 +102,12 @@ class Kakuro(Frame):
 
   def drawNew(self, rows, cols, mode):
     self.menu.file.entryconfigure('Save', state = DISABLED)
-    self.board.drawNew(rows, cols)
-    self.setTitle(mode)
+    if mode == 'Solver':
+      self.solver.drawNew(rows, cols)
+      self.enableSolver()
+    else:
+      self.player.drawNew(rows, cols)
+      self.enablePlayer()
 
   def openFile(self):
     # Mainly for development, to avoid having to enter puzzles
@@ -127,7 +127,7 @@ class Kakuro(Frame):
     self.drawNew(int(rows), int(cols), 'Solver')
     cluePattern = re.compile(r'\d+ +\d+ +\d+ +\d+.*\n')
     clues = cluePattern.findall(text)
-    self.board.displaySolverClues(clues)
+    self.solver.displayClues(clues)
 
   def savePuzzleKro(self):
     # Save puzzle in .kro format
@@ -136,7 +136,7 @@ class Kakuro(Frame):
     # If there are more rows than columns, the puzzle is transposed to
     # better fit a computer screen.
 
-    board = self.board
+    board = self.solver
     rows = board.rows
     cols = board.cols
     fname = asksaveasfilename( filetypes = [('Kakuro Files', '.kro')],
@@ -144,6 +144,9 @@ class Kakuro(Frame):
                                defaultextension = 'kro',
                                initialdir = self.fileSaveDir)
     if not fname: return
+    # Force a .kro extension in linux
+    if not fname.endswith('.kro'):
+      fname = fname[:-3] + '.kro'
     self.fileSaveDir = os.path.split(fname[0])
     fout = file(fname, 'w')
     fout.write('# %s\n' % os.path.split(fname)[1])
@@ -162,7 +165,7 @@ class Kakuro(Frame):
       fout.write('%3s %3s %3s %3s\n' % (b[0], b[1], clues[0], clues[1]))
     fout.write('\nSolution\n')
     fout.write('Row Col Ans\n\n')
-    soln = self.solns[0]
+    soln = self.solver.getSolution()
     if rows > cols:
       soln = {(k[1], k[0]):soln[k] for k in soln}
     for white in sorted(soln):
@@ -185,14 +188,14 @@ class Kakuro(Frame):
     self.drawNew(int(rows), int(cols), 'Player')
     cluePattern = re.compile(r'\d+ +\d+ +\d+ +\d+.*\n')
     clues = cluePattern.findall(text)
-    self.board.displayPlayerClues(clues)
+    self.player.displayClues(clues)
     self.timer.pause(reset = True)
 
   def savePuzzleKak(self):
     pass
 
   def clearSolution(self):
-    self.board.clearSolution()
+    self.solver.clearSolution()
     self.menu.file.entryconfigure('Clear', state = DISABLED)
 
   def wrapup(self):
@@ -201,84 +204,19 @@ class Kakuro(Frame):
         self.savePuzzleKro()
     self.master.destroy()
 
-  def solve(self):
-    board = self.board
-    timer = self.timer
-    rows = board.rows
-    cols = board.cols
+  def enableSolver(self):
+    if self.player.winfo_ismapped():
+      self.player.grid_remove()
+      self.player.disable()
+      self.solver.grid()
+    self.solver.enable()
 
-    # unhighlight any highlighted cell
-    board.unhighlight()
-
-    clues = board.getClues()
-    across = {k:clues[k][0] for k in clues}
-    down  = {k:clues[k][1] for k in clues}
-
-    # add a sentinel black square to the end of each row and column
-    for r in range(rows+1):
-      across[r, cols] = 0
-    for c in range(cols+1):
-      down[rows, c] = 0
-
-    aSum = sum(across.values())
-    dSum = sum(down.values())
-
-    if  aSum == 0:
-      showerror('No Puzzle', 'Please enter some clues')
-      return []
-
-    if aSum != dSum:
-      showerror('Inconsistent Data',
-         'Across clues total %d\nDown clues total %d' % (aSum, dSum))
-      return []
-
-    bad = kakuroCSP.sanityCheck(rows, cols, across, down)
-    if bad:
-      errs = ["row %2s col %2s: Can't make %2d in %s\n" % b for b in bad]
-      self.errorDialog('\n'.join(errs))
-      return []
-
-    board.disableSolver()
-    kakuroCSP.solverDone = False
-    self.timer.start()
-    solver = thread.start_new_thread(kakuroCSP.kakuroCSP, ())
-
-    while not kakuroCSP.solverDone:
-      timer.update()
-      board.after(100)
-
-    self.timer.stop()
-    self.solns = kakuroCSP.solutions
-    self.vars  = kakuroCSP.variables
-
-    self.report()
-    board.delete('notice')
-
-  def errorDialog(self, errs):
-    win = Toplevel()
-    win.withdraw()
-
-    label = Label(win, text = errs)
-    label.grid(row= 0, column = 0)
-    button = Button(win, text = 'Okay', command = win.destroy)
-
-    displayDialog(win, self.master, 'Invalid Clues')
-
-  def report(self):
-    solns = self.solns
-    if not solns:
-      showerror('Bad Problem', 'No Solution')
-    elif len(solns) == 1:
-      self.menu.file.entryconfigure('Save', state = NORMAL)
-      if askyesno('One Solution', 'Display the solution?', default='no'):
-        self.board.showSolution(0)
-    else:
-      for idx, soln in enumerate(solns):
-        if askyesno('%d Solutions' % len(solns),
-                    'Display solution number %d?' %(idx+1)):
-          self.board.showSolution(idx)
-        else:
-          break
+  def enablePlayer(self):
+    if self.solver.winfo_ismapped():
+      self.solver.grid_remove()
+      self.solver.disable()
+      self.player.grid()
+    self.player.enable()
 
 def main():
   root = Tk()

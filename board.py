@@ -19,7 +19,6 @@ class Board(ScrolledCanvas):
     ScrolledCanvas.__init__(self, master, width = width, height = height,
                             bg=bg, cursor=cursor, scrolls = scrolls)
     self.reset(width, rows, cols)
-    self.master = master
 
   def reset(self, width, rows, cols):
     rows += 1   # Allow for top and left boundaries
@@ -67,96 +66,10 @@ class Board(ScrolledCanvas):
         canvas.create_text(x+2, y+ch-2, anchor = SW, tag = clueTag+'D',
                                    text = '', font = clueFont)
     canvas.itemconfigure('black', fill = blackFill)
-    self.enableSolver()
 
-  def enableSolver(self):
-    self.tag_bind('cell', '<ButtonPress-1>', self.solverLeftClick)
-    self.tag_bind('cell', '<ButtonPress-3>', self.solverRightClick)
-    try:
-      self.master.control.enable()
-    except AttributeError:          # occurs at app startup
-      pass
-
-  def disableSolver(self):
-    self.tag_bind('cell', '<ButtonPress-1>', lambda event:None)
-    self.tag_bind('cell', '<ButtonPress-3>', lambda event:None)
-    self.master.control.disable()
-
-  def solverLeftClick(self, event):
-
-    canvas = event.widget
-    control = self.master.control
-    acrossScale = control.acrossScale
-    downScale = control.downScale
-
-    acrossScale.configure(state = DISABLED)
-    downScale.configure(state = DISABLED)
-
-    # first unhighlight the current cell
-
-    canvas.itemconfigure('highlight', fill=blackFill)
-    canvas.dtag('highlight', 'highlight')
-
-    obj = canvas.find_withtag('current')
-    canvas.addtag_withtag('highlight', obj)
-    canvas.addtag_withtag('black', obj)
-    canvas.itemconfigure(obj, fill = currentFill)
-
-    tags = canvas.gettags('current')
-    rTag = [tag for tag in tags if tag.startswith('R')][0]
-    cTag = [tag for tag in tags if tag.startswith('C')][0]
-    clueTag = 'clue' + rTag + cTag
-
-    aText = canvas.itemcget(clueTag+'A', 'text')
-    aClue = int(aText) if aText else 0
-    acrossScale.configure(state = NORMAL)
-    acrossScale.set(aClue)
-    if 'top' in tags or 'right' in tags:
-      acrossScale.configure(state = DISABLED)
-
-    dText = canvas.itemcget(clueTag+'D', 'text')
-    dClue = int(dText) if dText else 0
-    downScale.configure(state = NORMAL)
-    downScale.set(dClue)
-    if 'bottom' in tags or 'left' in tags:
-      downScale.configure(state = DISABLED)
-
-  def solverRightClick(self, event):
-
-    # Unselect a black square
-
-    canvas = event.widget
-
-    control = self.master.control
-    acrossScale = control.acrossScale
-    downScale = control.downScale
-
-    # first unhighlight the highlighted cell
-
-    canvas.itemconfigure('highlight', fill=blackFill)
-    canvas.dtag('highlight', 'highlight')
-
-    # Erase any clues
-    tags = canvas.gettags('current')
-    rTag = [tag for tag in tags if tag.startswith('R')][0]
-    cTag = [tag for tag in tags if tag.startswith('C')][0]
-    clueTag = 'clue' + rTag + cTag
-    for scale in (acrossScale, downScale):
-      scale.configure(state = NORMAL)
-      scale.set(0)
-      scale.configure(state = DISABLED)
-    for d in ('A', 'D'):
-      canvas.itemconfigure(clueTag+d, text = '')
-
-    if 'top' not in tags and 'left' not in tags:
-      canvas.dtag('current', 'black')
-      canvas.itemconfigure('current', fill = defaultFill)
-
-  def showSolution(self, idx):
+  def showSolution(self, soln, variables):
     canvas = self.canvas
-    master = self.master
-    soln = master.solns[idx]
-    variables = master.vars
+    master = self.nametowidget(self.winfo_parent())
     canvas.delete('solution')
     for v in variables:
       coords = '%s.%s' % v
@@ -177,12 +90,17 @@ class Board(ScrolledCanvas):
     left, top, right, bottom = canvas.bbox('all')
 
     if fout:
+      # force .ps extension in linux
+      if not fout.endswith('.ps'):
+        fout = fout[:-2] + '.ps'
+      self.unhighlight()
       canvas.postscript(colormode="gray", file=fout,
                         height = bottom-top, width = right-left,
                         x = 10, y = 10)
 
   def clearSolution(self):
     self.itemconfigure('solution', fill= defaultFill)
+    self.unhighlight()
 
   def drawNew(self, rows, cols):
     root = self.winfo_toplevel()
@@ -190,7 +108,7 @@ class Board(ScrolledCanvas):
     self.delete('all')
     self.reset(width, rows, cols)
 
-  def displaySolverClues(self, clues):
+  def displayClues(self, clues):
     canvas = self.canvas
     for clue in clues:
       row, col, across, down = clue.split()
@@ -203,30 +121,6 @@ class Board(ScrolledCanvas):
         canvas.itemconfigure(aTag, text = across)
       if down != '0':
         canvas.itemconfigure(dTag, text = down)
-    canvas.itemconfigure('black', fill = blackFill)
-
-  def displayPlayerClues(self, clues):
-    canvas = self.canvas
-    for clue in clues:
-      row, col, across, down = clue.split()
-      coords = '%s.%s' % (row, col)
-      cell = canvas.find_withtag(coords)
-      canvas.addtag_withtag('black', coords)
-      if across != '0':
-        left, top, right, bottom = canvas.bbox(cell)
-        p = canvas.create_polygon(left, top, right, top, right, bottom,
-                fill = '', activefill = currentFill, tag = coords)
-
-        canvas.create_text(right-2, top+2, anchor = NE, text = across,
-                           fill = 'black', font = clueFont)
-      if down != '0':
-        left, top, right, bottom = canvas.bbox(cell)
-        p = canvas.create_polygon(left, top, left, bottom, right, bottom,
-                fill = '', activefill = currentFill, tag = coords)
-        canvas.create_text(left+2, bottom-2, anchor = SW, text = down,
-                           fill = 'black', font = clueFont)
-      if across != '0' or down != '0':
-        canvas.create_line(left, top, right, bottom)
     canvas.itemconfigure('black', fill = blackFill)
 
   def unhighlight(self):
@@ -255,6 +149,8 @@ class Board(ScrolledCanvas):
       clues[r, c] = (a, d)
 
     return clues
+
+
 
 #class Board(Canvas):
     ## View
