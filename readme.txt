@@ -1,5 +1,5 @@
 This project is concerned with kakuro. or cross sums puzzles.  A kakuro puzzle
-is like a crossword puzzle, but instead of instead of letters you fill in
+is like a crossword puzzle, but instead of letters you fill in
 numbers.  The clues are the totals that the numbers in a particular sum have to
 come to.  Each number is a single difit from 1 to 9, and the numbers in each
 sum must all be different.
